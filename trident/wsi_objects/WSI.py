@@ -837,6 +837,10 @@ class OpenSlideWSI:
         # Concatenate features
         features = np.concatenate(features, axis=0)
 
+        # Return raw features if no save_features directory is specified:
+        if save_features is None:
+            return features 
+        
         # Save the features to disk
         os.makedirs(save_features, exist_ok=True)
         if saveas == 'h5':
@@ -937,6 +941,10 @@ class OpenSlideWSI:
         with torch.autocast(device_type='cuda', enabled=(slide_encoder.precision != torch.float32)):
             features = slide_encoder(batch, device)
         features = features.float().cpu().numpy().squeeze()
+
+        # Return raw features if no save_features directory is specified:
+        if save_features is None:
+            return features 
 
         # Save slide-level features if save path is provided
         os.makedirs(save_features, exist_ok=True)
