@@ -1272,15 +1272,15 @@ class TRACEBaseInferenceEncoder(BasePatchEncoder):
         weights_dir = os.path.dirname(weights_path)
         os.makedirs(weights_dir, exist_ok=True)
 
-        if os.path.isfile(weights_path):
-            model, precision, eval_transform = create_model_from_pretrained(checkpoint_path=weights_path)
-        else:
-            print("Downloading model weights from HuggingFace...")
-            model, precision, eval_transform = create_model_from_pretrained(
-                checkpoint_path="hf_hub:MahmoodLab/TRACE", 
-                cache_dir=weights_dir,
-            )
-            torch.save(model.state_dict(), weights_path)
+        # if os.path.isfile(weights_path):
+        # model, precision, eval_transform = create_model_from_pretrained(checkpoint_path=weights_path)
+        # else:
+        # print("Downloading model weights from HuggingFace...")
+        model, precision, eval_transform = create_model_from_pretrained(
+            checkpoint_path="hf_hub:MahmoodLab/TRACE", 
+            cache_dir=weights_dir,
+        )
+        # torch.save(model.state_dict(), weights_path)
 
         return model, eval_transform, precision
     
