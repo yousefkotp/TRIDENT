@@ -27,7 +27,7 @@ def parse_arguments():
                                  'resnet50', 'gigapath', 'virchow', 'virchow2', 
                                  'hoptimus0', 'hoptimus1', 'phikon_v2', 'conch_v15', 'musk', 'hibou_l',
                                  'kaiko-vits8', 'kaiko-vits16', 'kaiko-vitb8', 'kaiko-vitb16',
-                                 'kaiko-vitl14', 'lunit-vits8'],
+                                 'kaiko-vitl14', 'lunit-vits8', 'trace_base'],
                         help='Patch encoder to use')
     parser.add_argument("--mag", type=int, choices=[5, 10, 20, 40], default=20,
                         help="Magnification at which patches/features are extracted")

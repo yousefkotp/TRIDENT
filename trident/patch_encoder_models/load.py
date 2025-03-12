@@ -101,6 +101,8 @@ def encoder_factory(model_name: str, **kwargs):
         enc = LunitS8InferenceEncoder
     elif model_name == 'midnight12k':
         enc = Midnight12kInferenceEncoder
+    elif model_name == 'trace_base':
+        enc = TRACEBaseInferenceEncoder
     else:
         raise ValueError(f"Unknown encoder name {model_name}")
 
@@ -1253,3 +1255,35 @@ class Midnight12kInferenceEncoder(BasePatchEncoder):
             raise ValueError(
                 f"expected return_type to be one of 'cls_token' or 'cls+mean', but got '{self.return_type}'"
             )
+
+
+class TRACEBaseInferenceEncoder(BasePatchEncoder):
+    def _build(self):
+
+        try:
+            from tox_trace.patch_encoder.factory import create_model_from_pretrained
+        except:
+            traceback.print_exc()
+            raise Exception("Failed to import TRACE package.Please install TRACE model using `pip install git+https://github.com/mahmoodlab/tox-foundation.git@main`.")
+            # raise Exception("Failed to import TRACE package.Please install TRACE model using `pip install git+ssh://git@github.com/mahmoodlab/tox-foundation.git@main`.")
+
+        self.enc_name = 'trace_base'
+        weights_path = get_weights_path('patch', self.enc_name)
+        weights_dir = os.path.dirname(weights_path)
+        os.makedirs(weights_dir, exist_ok=True)
+
+        if os.path.isfile(weights_path):
+            model, precision, eval_transform = create_model_from_pretrained(checkpoint_path=weights_path)
+        else:
+            print("Downloading model weights from HuggingFace...")
+            model, precision, eval_transform = create_model_from_pretrained(
+                checkpoint_path="hf_hub:MahmoodLab/TRACE", 
+                cache_dir=weights_dir,
+            )
+            torch.save(model.state_dict(), weights_path)
+
+        return model, eval_transform, precision
+    
+    def forward(self, x):
+        out = self.model.forward_features(x)[:, 0, :]
+        return out
