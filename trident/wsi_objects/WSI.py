@@ -50,7 +50,8 @@ class OpenSlideWSI:
         tissue_seg_path: Optional[str] = None,
         custom_mpp_keys: Optional[List[str]] = None,
         lazy_init: bool = True,
-        mpp: Optional[float] = None
+        mpp: Optional[float] = None,
+        max_workers: Optional[int] = None,
     ):
         """
         Initialize the `OpenSlideWSI` object for working with a Whole Slide Image (WSI).
@@ -69,6 +70,7 @@ class OpenSlideWSI:
             If True, defer loading the WSI until required. Defaults to True.
         mpp: float, optional
             If not None, will be the reference micron per pixel (mpp). Handy when mpp is not provided in the WSI.
+        max_workers (Optional[int]): Maximum number of workers for data loading
 
         Example:
         --------
@@ -88,6 +90,7 @@ class OpenSlideWSI:
         self.mpp = mpp  # Placeholder microns per pixel. Defaults will be None unless specified in constructor. 
         self.mag = None  # Placeholder magnification
         self.lazy_init = lazy_init  # Initialize immediately if lazy_init is False
+        self.max_workers = max_workers
 
         if not self.lazy_init:
             self._lazy_initialize()
@@ -463,7 +466,7 @@ class OpenSlideWSI:
         device = segmentation_model.device
         eval_transforms = segmentation_model.eval_transforms
         dataset = WSIPatcherDataset(patcher, eval_transforms)
-        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=get_num_workers(batch_size), pin_memory=True)
+        dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=get_num_workers(batch_size, max_workers=self.max_workers), pin_memory=True)
 
         mpp_reduction_factor = self.mpp / destination_mpp
         width, height = self.get_dimensions()
@@ -827,7 +830,7 @@ class OpenSlideWSI:
             pil=True
         )
         dataset = WSIPatcherDataset(patcher, patch_transforms)
-        dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=get_num_workers(batch_limit), pin_memory=True)
+        dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=get_num_workers(batch_limit, max_workers=self.max_workers), pin_memory=True)
 
         features = []
         for imgs, _ in dataloader:
