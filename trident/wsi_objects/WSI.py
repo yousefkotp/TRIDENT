@@ -754,7 +754,7 @@ class OpenSlideWSI:
 
         # Save visualization
         os.makedirs(save_patch_viz, exist_ok=True)
-        viz_coords_path = os.path.join(save_patch_viz, f'{os.path.splitext(os.path.basename(self.name))[0]}.jpg')
+        viz_coords_path = os.path.join(save_patch_viz, f'{self.name}.jpg')
         Image.fromarray(canvas).save(viz_coords_path)
 
         return viz_coords_path

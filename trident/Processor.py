@@ -287,7 +287,7 @@ class Processor:
                 self.cleanup(f'{wsi.name}{wsi.ext}')
             except Exception as e:
                 if isinstance(e, KeyboardInterrupt):
-                    remove_lock(os.path.join(saveto, f'{wsi.name}.png'))
+                    remove_lock(os.path.join(saveto, f'{wsi.name}.jpg'))
                 if self.skip_errors:
                     update_log(os.path.join(self.job_dir, '_logs_segmentation.txt'), f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
@@ -421,7 +421,7 @@ class Processor:
                 if isinstance(e, KeyboardInterrupt):
                     remove_lock(os.path.join(self.job_dir, saveto, 'patches', f'{wsi.name}_patches.h5'))
                 if self.skip_errors:
-                    update_log(os.path.join(self.job_dir, saveto, '_logs_coords.txt'), wsi.name, f'ERROR: {e}')
+                    update_log(os.path.join(self.job_dir, saveto, '_logs_coords.txt'), f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
                 else:
                     raise e
@@ -559,7 +559,7 @@ class Processor:
                 if isinstance(e, KeyboardInterrupt):
                     remove_lock(wsi_feats_fp)
                 if self.skip_errors:
-                    update_log(log_fp, wsi.name, f'ERROR: {e}')
+                    update_log(log_fp, f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
                 else:
                     raise e
@@ -704,7 +704,7 @@ class Processor:
                 if isinstance(e, KeyboardInterrupt):
                     remove_lock(slide_feature_path)
                 if self.skip_errors:
-                    update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_features_{slide_encoder.enc_name}.txt'), wsi.name, f'ERROR: {e}')
+                    update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_features_{slide_encoder.enc_name}.txt'), f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
                 else:
                     raise e
