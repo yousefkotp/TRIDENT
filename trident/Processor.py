@@ -38,7 +38,8 @@ class Processor:
         clear_cache: bool = False, 
         skip_errors: bool = False,
         custom_mpp_keys: Optional[List[str]] = None,
-        custom_list_of_wsis: Optional[str] = None, 
+        custom_list_of_wsis: Optional[str] = None,
+        max_workers: Optional[int] = None,
     ) -> None:
         """
         The `Processor` class handles all preprocessing steps starting from whole-slide images (WSIs). 
@@ -81,6 +82,9 @@ class Processor:
                 these slides will be considered for processing. Defaults to None, which means all 
                 slides matching the wsi_ext extensions will be processed.
                 Note: If `custom_list_of_wsis` is provided, any names that do not match the available slides will be ignored, and a warning will be printed.
+            max_workers (int, optional):
+                Maximum number of workers for data loading. If None, the default behavior will be used.
+                Defaults to None.
 
         Returns:
             None: This method initializes the class instance and sets up the environment for processing.
@@ -100,7 +104,7 @@ class Processor:
 
         Raises:
             AssertionError: If `wsi_ext` is not a list or if any extension does not start with a period.
-    """
+        """
         
         if not (sys.version_info.major >= 3 and sys.version_info.minor >= 9):
             raise EnvironmentError("Trident requires Python 3.9 or above. Python 3.10 is recommended.")
@@ -112,6 +116,7 @@ class Processor:
         self.clear_cache = clear_cache
         self.skip_errors = skip_errors
         self.custom_mpp_keys = custom_mpp_keys
+        self.max_workers = max_workers
 
         # Collect list of valid slides
         assert isinstance(self.wsi_ext, list), f'wsi_ext must be a list of file extensions, got {self.wsi_ext} of type {type(self.wsi_ext)}'
@@ -151,7 +156,8 @@ class Processor:
                 name=wsi,
                 tissue_seg_path=tissue_seg_path,
                 custom_mpp_keys=self.custom_mpp_keys,
-                mpp=valid_mpps[wsi_idx] if valid_mpps is not None else None
+                mpp=valid_mpps[wsi_idx] if valid_mpps is not None else None,
+                max_workers=self.max_workers
             )
             self.wsis.append(openslide_wsi)
 
@@ -299,7 +305,7 @@ class Processor:
                 self.cleanup(f'{wsi.name}{wsi.ext}')
             except Exception as e:
                 if isinstance(e, KeyboardInterrupt):
-                    remove_lock(os.path.join(saveto, f'{wsi.name}.png'))
+                    remove_lock(os.path.join(saveto, f'{wsi.name}.jpg'))
                 if self.skip_errors:
                     update_log(os.path.join(self.job_dir, '_logs_segmentation.txt'), f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
@@ -433,7 +439,7 @@ class Processor:
                 if isinstance(e, KeyboardInterrupt):
                     remove_lock(os.path.join(self.job_dir, saveto, 'patches', f'{wsi.name}_patches.h5'))
                 if self.skip_errors:
-                    update_log(os.path.join(self.job_dir, saveto, '_logs_coords.txt'), wsi.name, f'ERROR: {e}')
+                    update_log(os.path.join(self.job_dir, saveto, '_logs_coords.txt'), f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
                 else:
                     raise e
@@ -571,7 +577,7 @@ class Processor:
                 if isinstance(e, KeyboardInterrupt):
                     remove_lock(wsi_feats_fp)
                 if self.skip_errors:
-                    update_log(log_fp, wsi.name, f'ERROR: {e}')
+                    update_log(log_fp, f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
                 else:
                     raise e
@@ -716,7 +722,7 @@ class Processor:
                 if isinstance(e, KeyboardInterrupt):
                     remove_lock(slide_feature_path)
                 if self.skip_errors:
-                    update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_features_{slide_encoder.enc_name}.txt'), wsi.name, f'ERROR: {e}')
+                    update_log(os.path.join(self.job_dir, coords_dir, f'_logs_slide_features_{slide_encoder.enc_name}.txt'), f'{wsi.name}{wsi.ext}', f'ERROR: {e}')
                     continue
                 else:
                     raise e
