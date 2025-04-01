@@ -532,7 +532,9 @@ class Processor:
             ignore = ['patch_encoder', 'loop', 'valid_slides', 'wsis']
         )
 
-        # check if patch_encoder is a Pytorch model
+        # If patch_encoder is a Pytorch model, or a CustomInferenceEncoder that wraps
+        # a PyTorch model, we automatically set eval mode and move weights to specified device.
+        # In all other cases, the user must ensure data and weights reside on the same device.
         if isinstance(patch_encoder, torch.nn.Module):
             patch_encoder.eval()
             patch_encoder.to(device)
