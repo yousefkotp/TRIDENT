@@ -208,7 +208,7 @@ class GrandQCSegmenter(SegmentationModel):
                 repo_type='model',
                 local_dir=checkpoint_dir,
                 cache_dir=checkpoint_dir,
-                allow_patterns=["*MMP10.pth"],
+                allow_patterns=["*MPP10.pth"],
             )
 
         model.load_state_dict(torch.load(os.path.join(checkpoint_dir, MODEL_TD_NAME), map_location='cpu'))
