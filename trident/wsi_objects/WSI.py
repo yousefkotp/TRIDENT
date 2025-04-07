@@ -671,7 +671,6 @@ class WSI:
             custom_coords=coords,
             coords_only=False,
             pil=True,
-            device=device
         )
         dataset = WSIPatcherDataset(patcher, patch_transforms)
         dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=get_num_workers(batch_limit, max_workers=self.max_workers), pin_memory=True)
