@@ -3,10 +3,15 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torchvision import transforms
-current_dir = os.path.dirname(os.path.abspath(__file__))
 from abc import abstractmethod
 
+from trident.IO import get_dir, get_weights_path, has_internet_connection
+
+
 class SegmentationModel(torch.nn.Module):
+
+    _has_internet = has_internet_connection()
+
     def __init__(self, freeze=True, confidence_thresh=0.5, **build_kwargs):
         super().__init__()
         self.model, self.eval_transforms = self._build(**build_kwargs)
@@ -19,64 +24,90 @@ class SegmentationModel(torch.nn.Module):
             self.model.eval()
             
     def forward(self, batch):
-        '''
+        """
         Can be overwritten if model requires special forward pass.
-        '''
+        """
         z = self.model(batch)
         return z
         
     @abstractmethod
-    def _build(self, **build_kwargs):
+    def _build(self, **build_kwargs) -> tuple[nn.Module, transforms.Compose]:
+        """Build the segmentation model and preprocessing transforms."""
         pass
-
 
 class HESTSegmenter(SegmentationModel):
 
-    def _build(self, checkpoint_dir, device):
+    def _build(self, device: torch.device):
+        """
+        Build and load HESTSegmenter model.
 
-        model = torch.hub.load('pytorch/vision:v0.10.0', 'deeplabv3_resnet50')
-        model.classifier[4] = nn.Conv2d(
-            in_channels=256,
-            out_channels=2,
-            kernel_size=1,
-            stride=1
-        )
+        Args:
+            device (torch.device): Device to load the model onto.
 
-        # download is not prev. downloaded. 
-        if not os.path.isfile(os.path.join(checkpoint_dir, 'deeplabv3_seg_v4.ckpt')):
-            try:
-                from huggingface_hub import snapshot_download
-            except:
-                raise Exception("Please install huggingface_hub (`pip install huggingface_hub`) to use this model")
-            
-            snapshot_download(
+        Returns:
+            Tuple[nn.Module, transforms.Compose]: Model and preprocessing transforms.
+        """
+
+        from torchvision.models.segmentation import deeplabv3_resnet50
+
+        model_ckpt_name = 'deeplabv3_seg_v4.ckpt'
+        weights_path = get_weights_path('seg', 'hest')
+
+        # Check if a path is provided but doesn't exist
+        if weights_path and not os.path.isfile(weights_path):
+            raise FileNotFoundError(f"Expected checkpoint at '{weights_path}', but the file was not found.")
+
+        # Initialize base model
+        model = deeplabv3_resnet50(weights=False)
+        model.classifier[4] = nn.Conv2d(256, 2, kernel_size=1, stride=1)
+
+        if not os.path.isfile(weights_path):
+            if not SegmentationModel._has_internet:
+                raise FileNotFoundError(
+                    f"Internet connection not available and checkpoint not found locally at '{weights_path}' in trident/segmentation_models/local_ckpts.json.\n\n"
+                    f"To proceed, please manually download {model_ckpt_name} from:\n"
+                    f"https://huggingface.co/MahmoodLab/hest-tissue-seg/\n"
+                    f"and place it at:\nlocal_ckpts.json"
+                )
+
+            # If internet is available, download from HuggingFace
+            from huggingface_hub import snapshot_download
+            checkpoint_dir = snapshot_download(
                 repo_id="MahmoodLab/hest-tissue-seg",
                 repo_type='model',
-                local_dir=checkpoint_dir,
-                cache_dir=checkpoint_dir,
-                allow_patterns=["*.ckpt"]
+                local_dir=get_dir(),
+                cache_dir=get_dir(),
+                allow_patterns=[model_ckpt_name]
             )
 
-        checkpoint = torch.load(os.path.join(checkpoint_dir, 'deeplabv3_seg_v4.ckpt'), map_location=torch.device('cpu'), weights_only=False)
-            
-        clean_state_dict = {}
-        for key in checkpoint['state_dict']:
-            if 'aux' in key:
-                continue
-            new_key = key.replace('model.', '')
-            clean_state_dict[new_key] = checkpoint['state_dict'][key]
-        model.load_state_dict(clean_state_dict)
+            weights_path = os.path.join(checkpoint_dir, model_ckpt_name)
+
+        # Load and clean checkpoint
+        checkpoint = torch.load(weights_path, map_location='cpu')
+        state_dict = {
+            k.replace('model.', ''): v
+            for k, v in checkpoint.get('state_dict', {}).items()
+            if 'aux' not in k
+        }
+
+        model.load_state_dict(state_dict)
         model.to(device)
+
+        # Store configuration
         self.device = device
         self.input_size = 512
         self.precision = torch.float16
         self.target_mag = 10
 
-        eval_transforms = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+        eval_transforms = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=(0.485, 0.456, 0.406),
+                                 std=(0.229, 0.224, 0.225))
+        ])
 
         return model, eval_transforms
     
-    def forward(self, image):
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
         # input should be of shape (batch_size, C, H, W)
         assert len(image.shape) == 4, f"Input must be 4D image tensor (shape: batch_size, C, H, W), got {image.shape} instead"
         logits = self.model(image.to(self.device))['out']
@@ -106,60 +137,80 @@ class JpegCompressionTransform:
 
 class GrandQCArtifactSegmenter(SegmentationModel):
 
-    def _build(self, checkpoint_dir, device):
+    def _build(self, device):
         """
-        Credit to https://www.nature.com/articles/s41467-024-54769-y
+        Load the GrandQC artifact removal segmentation model.
+        Credit: https://www.nature.com/articles/s41467-024-54769-y
         """
 
         import segmentation_models_pytorch as smp
 
+        model_ckpt_name = 'GrandQC_MPP1_state_dict.pth'
+        encoder_name = 'timm-efficientnet-b0'
+        encoder_weights = 'imagenet'
+        weights_path = get_weights_path('seg', 'grandqc_artifact')
+
+        # Verify that user-provided weights_path is valid
+        if weights_path and not os.path.isfile(weights_path):
+            raise FileNotFoundError(
+                f"Expected checkpoint at '{weights_path}', but the file was not found."
+            )
+
+        # Initialize model
+        model = smp.Unet(
+            encoder_name=encoder_name,
+            encoder_weights=encoder_weights,
+            classes=8,
+            activation=None,
+        )
+
+        # Attempt to download if file is missing and not already available
+        if not os.path.isfile(weights_path):
+            if not SegmentationModel._has_internet:
+                raise FileNotFoundError(
+                    f"Internet connection not available and checkpoint not found locally at '{weights_path}'.\n\n"
+                    f"To proceed, please manually download {model_ckpt_name} from:\n"
+                    f"https://huggingface.co/MahmoodLab/hest-tissue-seg/\n"
+                    f"and place it at:\nlocal_ckpts.json"
+                )
+
+            from huggingface_hub import snapshot_download
+            checkpoint_dir = snapshot_download(
+                repo_id="MahmoodLab/hest-tissue-seg",
+                repo_type='model',
+                local_dir=get_dir(),
+                cache_dir=get_dir(),
+                allow_patterns=[model_ckpt_name],
+            )
+
+            weights_path = os.path.join(checkpoint_dir, model_ckpt_name)
+
+        # Load checkpoint
+        state_dict = torch.load(weights_path, map_location='cpu', weights_only=True)
+        model.load_state_dict(state_dict)
+        model.to(device)
+        model.eval()
+
+        # Model config
         self.device = device
         self.input_size = 512
         self.precision = torch.float32
         self.target_mag = 10
 
-        MODEL_TD_NAME = 'GrandQC_MPP1_state_dict.pth'
-        ENCODER_MODEL_TD = 'timm-efficientnet-b0'
-        ENCODER_MODEL_TD_WEIGHTS = 'imagenet'
-
-        # eval_transforms = smp.encoders.get_preprocessing_fn(ENCODER_MODEL_TD, ENCODER_MODEL_TD_WEIGHTS)  # to double check if same
+        # Evaluation transforms
         eval_transforms = transforms.Compose([
-            transforms.ToTensor(),  
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
         ])
-
-        model = smp.Unet(
-            encoder_name=ENCODER_MODEL_TD,
-            encoder_weights=ENCODER_MODEL_TD_WEIGHTS,
-            classes=8,
-            activation=None,
-        )
-
-        if not os.path.isfile(os.path.join(checkpoint_dir, MODEL_TD_NAME)):
-            try:
-                from huggingface_hub import snapshot_download
-            except:
-                raise Exception("Please install huggingface_hub (`pip install huggingface_hub`) to use this model")
-            snapshot_download(
-                repo_id="MahmoodLab/hest-tissue-seg",
-                repo_type='model',
-                local_dir=checkpoint_dir,
-                cache_dir=checkpoint_dir,
-                allow_patterns=["*MPP1_state_dict.pth"],
-            )
-
-        state_dict = torch.load(os.path.join(checkpoint_dir, MODEL_TD_NAME), weights_only=True, map_location='cpu')
-        model.load_state_dict(state_dict)
-        model.to(device)
-        model.eval()
 
         return model, eval_transforms
 
-    def forward(self, batch):
-        '''
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
+        """
         Custom forward pass.
-        '''
-        logits = self.model.predict(batch)
+        """
+        logits = self.model.predict(image)
         probs = torch.softmax(logits, dim=1)  
         _, predicted_classes = torch.max(probs, dim=1)  
         predictions = torch.where(predicted_classes > 1, 0, 1)
@@ -168,60 +219,74 @@ class GrandQCArtifactSegmenter(SegmentationModel):
 
 
 class GrandQCSegmenter(SegmentationModel):
-
-    def _build(self, checkpoint_dir, device):
+        
+    def _build(self, device):
         """
-        Credit to https://www.nature.com/articles/s41467-024-54769-y
+        Load the GrandQC tissue detection segmentation model.
+        Credit: https://www.nature.com/articles/s41467-024-54769-y
         """
         import segmentation_models_pytorch as smp
 
+        model_ckpt_name = 'Tissue_Detection_MPP10.pth'
+        encoder_name = 'timm-efficientnet-b0'
+        encoder_weights = 'imagenet'
+        weights_path = get_weights_path('seg', 'grandqc') 
+
+        # Verify checkpoint path
+        if not os.path.isfile(weights_path):
+            if not SegmentationModel._has_internet:
+                raise FileNotFoundError(
+                    f"Internet connection not available and checkpoint not found locally at '{weights_path}'.\n\n"
+                    f"To proceed, please manually download {model_ckpt_name} from:\n"
+                    f"https://huggingface.co/MahmoodLab/hest-tissue-seg/\n"
+                    f"and place it at:\nlocal_ckpts.json"
+                )
+
+            from huggingface_hub import snapshot_download
+            checkpoint_dir = snapshot_download(
+                repo_id="MahmoodLab/hest-tissue-seg",
+                repo_type='model',
+                local_dir=get_dir(),
+                cache_dir=get_dir(),
+                allow_patterns=[model_ckpt_name],
+            )
+            weights_path = os.path.join(checkpoint_dir, model_ckpt_name)
+
+        # Initialize model
+        model = smp.UnetPlusPlus(
+            encoder_name=encoder_name,
+            encoder_weights=encoder_weights,
+            classes=2,
+            activation=None,
+        )
+
+        # Load checkpoint
+        state_dict = torch.load(weights_path, map_location='cpu', weights_only=True)
+        model.load_state_dict(state_dict)
+        model.to(device)
+        model.eval()
+
+        # Model config
         self.device = device
         self.input_size = 512
         self.precision = torch.float32
         self.target_mag = 1
 
-        MODEL_TD_NAME = 'Tissue_Detection_MPP10.pth'
-        ENCODER_MODEL_TD = 'timm-efficientnet-b0'
-        ENCODER_MODEL_TD_WEIGHTS = 'imagenet'
-
-        # eval_transforms = smp.encoders.get_preprocessing_fn(ENCODER_MODEL_TD, ENCODER_MODEL_TD_WEIGHTS)
+        # Evaluation transforms
         eval_transforms = transforms.Compose([
             JpegCompressionTransform(quality=80),
-            transforms.ToTensor(),  # Converts to [0,1] range and moves channels to [C, H, W]
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
         ])
-
-        model = smp.UnetPlusPlus(
-            encoder_name=ENCODER_MODEL_TD,
-            encoder_weights=ENCODER_MODEL_TD_WEIGHTS,
-            classes=2,
-            activation=None,
-        )
-
-        if not os.path.isfile(os.path.join(checkpoint_dir, MODEL_TD_NAME)):
-            try:
-                from huggingface_hub import snapshot_download
-            except:
-                raise Exception("Please install huggingface_hub (`pip install huggingface_hub`) to use this model")
-            snapshot_download(
-                repo_id="MahmoodLab/hest-tissue-seg",
-                repo_type='model',
-                local_dir=checkpoint_dir,
-                cache_dir=checkpoint_dir,
-                allow_patterns=["*MPP10.pth"],
-            )
-
-        model.load_state_dict(torch.load(os.path.join(checkpoint_dir, MODEL_TD_NAME), map_location='cpu'))
-        model.to(device)
-        model.eval()
 
         return model, eval_transforms
 
-    def forward(self, batch):
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
         '''
         Custom forward pass.
         '''
-        logits = self.model.predict(batch)
+        logits = self.model.predict(image)
         probs = torch.softmax(logits, dim=1)  
         max_probs, predicted_classes = torch.max(probs, dim=1)  
         predictions = (max_probs >= self.confidence_thresh) * (1 - predicted_classes)
@@ -230,15 +295,20 @@ class GrandQCSegmenter(SegmentationModel):
         return predictions
 
 
-def segmentation_model_factory(model_name, confidence_thresh=0.5, device='cuda', freeze=True):
-    '''
-    Build a slide encoder based on model name.
-    '''
+def segmentation_model_factory(
+    model_name: str, 
+    confidence_thresh: float = 0.5, 
+    device: str = 'cuda', 
+    freeze: bool = True
+) -> SegmentationModel:
+    """
+    Factory function to build a segmentation model by name.
+    """
     if model_name == 'hest':
-        return HESTSegmenter(freeze, confidence_thresh=confidence_thresh, checkpoint_dir=os.path.join(current_dir, 'hest-tissue-seg/'), device=device)
+        return HESTSegmenter(freeze, confidence_thresh=confidence_thresh, device=device)
     elif model_name == 'grandqc':
-        return GrandQCSegmenter(freeze, confidence_thresh=confidence_thresh, checkpoint_dir=os.path.join(current_dir, 'grandqc/'), device=device)
+        return GrandQCSegmenter(freeze, confidence_thresh=confidence_thresh, device=device)
     elif model_name == 'grandqc_artifact':
-        return GrandQCArtifactSegmenter(freeze, checkpoint_dir=os.path.join(current_dir, 'grandqc/'), device=device)
+        return GrandQCArtifactSegmenter(freeze, device=device)
     else:
         raise ValueError(f"Model type {model_name} not supported")

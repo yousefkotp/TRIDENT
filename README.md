@@ -19,6 +19,7 @@ This project was developed by the [Mahmood Lab](https://faisal.ai/) at Harvard M
 - **Slide Feature Extraction**: Extract slide embeddings from 5+ slide foundation models, including [Threads](https://arxiv.org/abs/2501.16652) (coming soon!), [Titan](https://arxiv.org/abs/2411.19666), and [GigaPath](https://www.nature.com/articles/s41586-024-07441-w). 
 
 ### Updates:
+- 04.25: Native support for PIL.Image and CuCIM.
 - 04.25: Remove artifacts from the tissue segmentation with `--remove_artifacts`. Works well for H&E.  
 - 02.25: New image converter from `czi`, `png`, etc to `tiff`.
 - 02.25: Support for [GrandQC](https://www.nature.com/articles/s41467-024-54769-y) tissue vs. background segmentation.
