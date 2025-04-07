@@ -1,17 +1,9 @@
 from __future__ import annotations
 import numpy as np
 from PIL import Image
-from typing import List, Tuple, Optional, Union
-import geopandas as gpd
-import torch 
+from typing import Tuple, Optional, Union
 
-from trident.wsi_objects.WSI import WSI
-
-try:
-    import cupy as cp
-except:
-    print('Couldnt import cupy. Please install cupy.')
-    exit()
+from trident.wsi_objects.WSI import WSI, ReadMode
 
 
 class CuCIMWSI(WSI):
@@ -21,24 +13,48 @@ class CuCIMWSI(WSI):
 
     def _lazy_initialize(self) -> None:
         """
-        Perform lazy initialization by loading the WSI file and its metadata using CuCIM.
+        Lazily load the whole-slide image (WSI) and its metadata using CuCIM.
 
-        Raises:
-        -------
-        FileNotFoundError:
-            If the WSI file or tissue segmentation mask cannot be found.
-        Exception:
-            If there is an error while initializing the WSI.
+        This method performs deferred initialization by reading the WSI file
+        only when needed. It also retrieves key metadata such as dimensions,
+        magnification, and microns-per-pixel (MPP). If a tissue segmentation
+        mask is available, it is also loaded.
 
-        Notes:
+        Raises
         ------
-        This method sets the following attributes after initialization:
-        - `width` and `height` of the WSI.
-        - `mpp` (microns per pixel) and `mag` (magnification level).
-        - `gdf_contours` if a tissue segmentation mask is provided.
+        ImportError
+            If `cupy` and/or `cucim` are not installed.
+        FileNotFoundError
+            If the WSI file or required segmentation mask is missing.
+        Exception
+            For any other errors that occur while initializing the WSI.
+
+        Notes
+        -----
+        After initialization, the following attributes are set:
+        - `width` and `height`: spatial dimensions of the WSI.
+        - `mpp`: microns per pixel, inferred if not already set.
+        - `mag`: estimated magnification level of the image.
+        - `level_count`, `level_downsamples`, and `level_dimensions`: multiresolution pyramid metadata.
+        - `properties`: raw metadata from the image.
+        - `gdf_contours`: tissue mask contours, if applicable.
         """
 
-        from cucim import CuImage
+        super()._lazy_initialize()
+
+        try:
+            from cucim import CuImage
+            import cupy as cp
+        except ImportError as e:
+            raise ImportError(
+                "Required dependencies not found: `cupy` and/or `cucim`.\n"
+                "Please install them with:\n"
+                "  pip install cucim cupy-cuda12x\n"
+                "Make sure `cupy-cuda12x` matches your local CUDA version.\n"
+                "Links:\n"
+                "  cucim: https://docs.rapids.ai/install/\n"
+                "  cupy: https://docs.cupy.dev/en/stable/install.html"
+            ) from e
 
         if not self.lazy_init:
             try:
@@ -49,21 +65,15 @@ class CuCIMWSI(WSI):
                 self.level_downsamples = self.img.resolutions['level_downsamples']
                 self.level_dimensions = self.img.resolutions['level_dimensions']
                 self.properties = self.img.metadata
-
                 if self.mpp is None:
                     self.mpp = self._fetch_mpp(self.custom_mpp_keys)
                 self.mag = self._fetch_magnification(self.custom_mpp_keys)
                 self.lazy_init = True
 
-                if self.tissue_seg_path is not None:
-                    try:
-                        self.gdf_contours = gpd.read_file(self.tissue_seg_path)
-                    except FileNotFoundError:
-                        raise FileNotFoundError(f"Tissue segmentation file not found: {self.tissue_seg_path}")
             except Exception as e:
-                raise Exception(f"Error initializing WSI: {e}")
+                raise RuntimeError(f"Failed to initialize WSI using CuCIM: {e}") from e
 
-    def _fetch_mpp(self, custom_keys: dict = None) -> Optional[float]:
+    def _fetch_mpp(self, custom_keys: dict = None) -> float:
         """
         Fetch the microns per pixel (MPP) from CuImage metadata.
 
@@ -74,8 +84,13 @@ class CuCIMWSI(WSI):
 
         Returns
         -------
-        float or None
-            Average MPP if found, else None.
+        float
+            MPP value in microns per pixel.
+
+        Raises
+        ------
+        ValueError
+            If MPP cannot be determined from metadata.
         """
         import json
 
@@ -135,8 +150,13 @@ class CuCIMWSI(WSI):
 
         if mpp_x is not None and mpp_y is not None:
             return float((mpp_x + mpp_y) / 2)
-
-        return None
+        
+        raise ValueError(
+            f"Unable to extract MPP from CuCIM metadata for: '{self.slide_path}'.\n"
+            "Suggestions:\n"
+            "- Provide `custom_keys` with metadata key mappings for 'mpp_x' and 'mpp_y'.\n"
+            "- Set the MPP manually when constructing the CuCIMWSI object."
+        )
 
     def get_thumbnail(self, size: tuple[int, int]) -> Image.Image:
         """
@@ -174,61 +194,59 @@ class CuCIMWSI(WSI):
         return region
 
     def read_region(
-        self, 
-        location: Tuple[int, int], 
-        level: int, 
+        self,
+        location: Tuple[int, int],
+        level: int,
         size: Tuple[int, int],
-        device: str = 'cpu',
-        read_as: str = 'pil',
-    ) -> Union[np.ndarray, torch.Tensor, Image.Image]:
+        read_as: ReadMode = 'pil',
+    ) -> Union[Image.Image, np.ndarray]:
         """
-        Extract a specific region from the whole-slide image (WSI) using CuCIM, with output as NumPy array,
-        Torch tensor, or PIL image.
+        Extract a specific region from the whole-slide image (WSI) using CuCIM.
 
-        Args:
-        -----
+        Parameters
+        ----------
         location : Tuple[int, int]
             (x, y) coordinates of the top-left corner of the region to extract.
         level : int
             Pyramid level to read from.
         size : Tuple[int, int]
             (width, height) of the region to extract.
-        device : str, optional
-            Device used to perform the read. Can be 'cpu' or 'cuda:0', etc. Defaults to 'cpu'.
-        read_as : str, optional
-            Format to return the region in. Options are:
-            - 'numpy': returns a NumPy array
-            - 'torch': returns a Torch tensor (on GPU)
-            - 'pil': returns a PIL Image object (default)
+        read_as : {'pil', 'numpy'}, optional
+            Output format for the region:
+            - 'pil': returns a PIL Image (default)
+            - 'numpy': returns a NumPy array (H, W, 3)
 
-        Returns:
-        --------
-        Union[np.ndarray, torch.Tensor, PIL.Image.Image]
+        Returns
+        -------
+        Union[PIL.Image.Image, np.ndarray]
             The extracted region in the specified format.
 
-        Example:
-        --------
-        >>> region = wsi.read_region((0, 0), level=0, size=(512, 512), device='cuda:0', read_as='torch')
-        >>> print(region.shape)
-        torch.Size([512, 512, 3])
+        Raises
+        ------
+        ValueError
+            If `read_as` is not one of the supported options.
+
+        Example
+        -------
+        >>> region = wsi.read_region((1000, 1000), level=0, size=(512, 512), read_as='pil')
+        >>> region.show()
         """
-        region = self.img.read_region(location=location, level=level, size=size, device=device)
 
-        if read_as == 'torch':
-            if 'cuda' in device:
-                return torch.as_tensor(region, device=device)
-            else:
-                return torch.from_numpy(cp.asnumpy(region))
-        elif read_as == 'numpy':
-            return cp.asnumpy(region)
+        import cupy as cp
+
+        region = self.img.read_region(location=location, level=level, size=size, device='cpu')
+        region = cp.asnumpy(region)  # Convert from CuPy to NumPy
+
+        if read_as == 'numpy':
+            return region
         elif read_as == 'pil':
-            return Image.fromarray(cp.asnumpy(region)).convert("RGB")
-
-        raise ValueError(f"Unsupported read_as value: {read_as}")
-
+            return Image.fromarray(region).convert("RGB")
+        else:
+            raise ValueError(f"Invalid `read_as` value: {read_as}. Must be 'pil' or 'numpy'.")
+        
     def get_dimensions(self) -> Tuple[int, int]:
         """
-        The `get_dimensions` function from the class `OpenSlideWSI` Retrieve the dimensions of the WSI.
+        Return the (width, height) dimensions of the CuCIM-managed WSI.
 
         Returns:
         --------
@@ -242,27 +260,27 @@ class CuCIMWSI(WSI):
         """
         return self.dimensions
 
-    def segment_tissue(self, **kwargs):
+    def segment_tissue(self, **kwargs) -> str:
         out = super().segment_tissue(**kwargs)
         self.close()
         return out
     
-    def extract_tissue_coords(self, **kwargs):
+    def extract_tissue_coords(self, **kwargs) -> str:
         out = super().extract_tissue_coords(**kwargs)
         self.close()
         return out
 
-    def visualize_coords(self, **kwargs):
+    def visualize_coords(self, **kwargs) -> str:
         out = super().visualize_coords(**kwargs)
         self.close()
         return out
 
-    def extract_patch_features(self, **kwargs):
+    def extract_patch_features(self, **kwargs) -> str:
         out = super().extract_patch_features(**kwargs)
         self.close()
         return out
 
-    def extract_slide_features(self, **kwargs):
+    def extract_slide_features(self, **kwargs) -> str:
         out = super().extract_slide_features(**kwargs)
         self.close()
         return out

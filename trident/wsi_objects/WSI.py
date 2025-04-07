@@ -5,27 +5,28 @@ from PIL import Image
 import os 
 import warnings
 import torch 
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Literal
 from torch.utils.data import DataLoader
 
 from trident.wsi_objects.WSIPatcher import *
 from trident.wsi_objects.WSIPatcherDataset import WSIPatcherDataset
-
 from trident.IO import (
     save_h5, read_coords, read_coords_legacy,
     mask_to_gdf, overlay_gdf_on_thumbnail, get_num_workers
 )
 
+ReadMode = Literal['pil', 'numpy']
+
 
 class WSI:
     """
-    The `WSI` class provides an interface to work with Whole Slide Images (WSIs) using OpenSlide. 
-    It supports lazy initialization, metadata extraction, patching, and advanced operations such as 
-    tissue segmentation and feature extraction. The class handles various WSI file formats and 
+    The `WSI` class provides an interface to work with Whole Slide Images (WSIs). 
+    It supports lazy initialization, metadata extraction, tissue segmentation,
+    patching, and feature extraction. The class handles various WSI file formats and 
     offers utilities for integration with AI models.
 
-    Attributes:
-    -----------
+    Attributes
+    ----------
     slide_path : str
         Path to the WSI file.
     name : str
@@ -37,13 +38,27 @@ class WSI:
     tissue_seg_path : str
         Path to a tissue segmentation mask (if available).
     width : int
-        Width of the WSI in pixels (lazy initialized).
+        Width of the WSI in pixels (set during lazy initialization).
     height : int
-        Height of the WSI in pixels (lazy initialized).
+        Height of the WSI in pixels (set during lazy initialization).
+    dimensions : Tuple[int, int]
+        (width, height) tuple of the WSI (set during lazy initialization).
     mpp : float
-        Microns per pixel (lazy initialized).
+        Microns per pixel (set during lazy initialization or inferred).
     mag : float
-        Magnification level (lazy initialized).
+        Estimated magnification level (set during lazy initialization or inferred).
+    level_count : int
+        Number of resolution levels in the WSI (set during lazy initialization).
+    level_downsamples : List[float]
+        Downsampling factors for each pyramid level (set during lazy initialization).
+    level_dimensions : List[Tuple[int, int]]
+        Dimensions of the WSI at each pyramid level (set during lazy initialization).
+    properties : dict
+        Metadata properties extracted from the image backend (set during lazy initialization).
+    img : Any
+        Backend-specific image object used for reading regions (set during lazy initialization).
+    gdf_contours : geopandas.GeoDataFrame
+        Tissue segmentation mask as a GeoDataFrame, if available (set during lazy initialization).
     """
 
     def __init__(
@@ -57,7 +72,7 @@ class WSI:
         max_workers: Optional[int] = None,
     ):
         """
-        Initialize the `OpenSlideWSI` object for working with a Whole Slide Image (WSI).
+        Initialize the `WSI` object for working with a Whole Slide Image (WSI).
 
         Args:
         -----
@@ -67,7 +82,7 @@ class WSI:
             Optional name for the WSI. Defaults to the filename (without extension).
         tissue_seg_path : str, optional
             Path to the tissue segmentation mask file. Defaults to None.
-        custom_mpp_keys : dict, optional
+        custom_mpp_keys : Optional[List[str]]
             Custom keys for extracting MPP and magnification metadata. Defaults to None.
         lazy_init : bool, optional
             If True, defer loading the WSI until required. Defaults to True.
@@ -101,23 +116,60 @@ class WSI:
         else:
             return f"<name={self.name}>"
     
+    def _lazy_initialize(self) -> None:
+        """
+        Perform lazy initialization of internal attributes for the WSI interface.
+
+        This method is intended to be called by subclasses of `WSI`, and should not be used directly.
+        It sets default values for key image attributes and optionally loads a tissue segmentation mask
+        if a path is provided. Subclasses must override this method to implement backend-specific behavior.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the tissue segmentation mask file is provided but cannot be found.
+
+        Notes
+        -----
+        This method sets the following attributes:
+        - `img`, `dimensions`, `width`, `height`: placeholder image properties (set to None).
+        - `level_count`, `level_downsamples`, `level_dimensions`: multiresolution placeholders (None).
+        - `properties`, `mag`: metadata and magnification (None).
+        - `gdf_contours`: loaded from `tissue_seg_path` if available.
+        """
+
+        if not self.lazy_init:
+            self.img = None
+            self.dimensions = None
+            self.width, self.height = None, None
+            self.level_count = None
+            self.level_downsamples = None
+            self.level_dimensions = None
+            self.properties = None
+            self.mag = None
+            if self.tissue_seg_path is not None:
+                try:
+                    self.gdf_contours = gpd.read_file(self.tissue_seg_path)
+                except FileNotFoundError:
+                    raise FileNotFoundError(f"Tissue segmentation file not found: {self.tissue_seg_path}")
+
     def create_patcher(
         self, 
         patch_size: int, 
-        src_pixel_size: float | None = None, 
-        dst_pixel_size: float | None = None,
-        src_mag: int | None = None, 
-        dst_mag: int | None = None,
+        src_pixel_size: Optional[float] = None, 
+        dst_pixel_size: Optional[float] = None, 
+        src_mag: Optional[int] = None, 
+        dst_mag: Optional[int] = None, 
         overlap: int = 0, 
-        mask: gpd.GeoDataFrame | None = None, 
+        mask: Optional[gpd.GeoDataFrame] = None,
         coords_only: bool = False, 
-        custom_coords: np.ndarray | None = None,
+        custom_coords:  Optional[np.ndarray] = None,
         threshold: float = 0.15,
         pil: bool = False,
         device: str = 'cpu',
     ) -> OpenSlideWSIPatcher:
         """
-        The `create_patcher` function from the class `OpenSlideWSI` Create a patcher object for extracting patches from the WSI.
+        The `create_patcher` function from the class `WSI` Create a patcher object for extracting patches from the WSI.
 
         Args:
         -----
@@ -131,7 +183,7 @@ class WSI:
 
         Returns:
         --------
-        WSIPatcher:
+        OpenSlideWSIPatcher:
             An object for extracting patches.
 
         Example:
@@ -145,21 +197,21 @@ class WSI:
             overlap, mask, coords_only, custom_coords, threshold, pil, device
         )
     
-    def _fetch_magnification(self, custom_mpp_keys: List[str] | None = None) -> int | None:
+    def _fetch_magnification(self, custom_mpp_keys: Optional[List[str]] = None) -> int:
         """
-        The `_fetch_magnification` function of the class `OpenSlideWSI` calculates the magnification level 
+        The `_fetch_magnification` function of the class `WSI` calculates the magnification level 
         of the WSI based on the microns per pixel (MPP) value or other metadata. The magnification levels are 
         approximated to commonly used values such as 80x, 40x, 20x, etc. If the MPP is unavailable or insufficient 
         for calculation, it attempts to fallback to metadata-based values.
 
         Args:
         -----
-        custom_mpp_keys : List[str] | None, optional
+        custom_mpp_keys : Optional[List[str]], optional
             Custom keys to search for MPP values in the WSI properties. Defaults to None.
 
         Returns:
         --------
-        int | None:
+        Optional[int]]:
             The approximated magnification level, or None if the magnification could not be determined.
 
         Raises:
@@ -173,40 +225,26 @@ class WSI:
         >>> print(mag)
         40
         """
-        try:
-            if self.mpp is None:
-                mpp_x = self._fetch_mpp(custom_mpp_keys)
+        if self.mpp is None:
+            mpp_x = self._fetch_mpp(custom_mpp_keys)
+        else:
+            mpp_x = self.mpp
+
+        if mpp_x is not None:
+            if mpp_x < 0.16:
+                return 80
+            elif mpp_x < 0.2:
+                return 60
+            elif mpp_x < 0.3:
+                return 40
+            elif mpp_x < 0.6:
+                return 20
+            elif mpp_x < 1.2:
+                return 10
+            elif mpp_x < 2.4:
+                return 5
             else:
-                mpp_x = self.mpp
-
-            if mpp_x is not None:
-                if mpp_x < 0.16:
-                    return 80
-                elif mpp_x < 0.2:
-                    return 60
-                elif mpp_x < 0.3:
-                    return 40
-                elif mpp_x < 0.6:
-                    return 20
-                elif mpp_x < 1.2:
-                    return 10
-                elif mpp_x < 2.4:
-                    return 5
-                else:
-                    raise ValueError(f"Identified mpp is too low: mpp={mpp_x}")
-
-            # Use metadata-based magnification as a fallback if mpp_x is not available
-            magnification = self.img.properties.get(openslide.PROPERTY_NAME_OBJECTIVE_POWER)
-            if magnification is not None:
-                return int(magnification)
-
-        except openslide.OpenSlideError as e:
-            print(f"Error: Failed to process WSI properties. {e}")
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-
-        # Return None if magnification couldn't be determined
-        return None
+                raise ValueError(f"Identified mpp is very low: mpp={mpp_x}. Most WSIs are at 20x, 40x magnfication.")
 
     @torch.inference_mode()
     @torch.autocast(device_type="cuda", dtype=torch.float16)
@@ -215,11 +253,11 @@ class WSI:
         segmentation_model: torch.nn.Module,
         target_mag: int = 10,
         holes_are_tissue: bool = True,
-        job_dir: str | None = None,
+        job_dir: Optional[str] = None,
         batch_size: int = 16,
     ) -> str:
         """
-        The `segment_tissue` function of the class `OpenSlideWSI` segments tissue regions in the WSI using 
+        The `segment_tissue` function of the class `WSI` segments tissue regions in the WSI using 
         a specified segmentation model. It processes the WSI at a target magnification level, optionally 
         treating holes in the mask as tissue. The segmented regions are saved as thumbnails and GeoJSON contours.
 
@@ -231,7 +269,7 @@ class WSI:
             Target magnification level for segmentation. Defaults to 10.
         holes_are_tissue : bool, optional
             Whether to treat holes in the mask as tissue. Defaults to True.
-        job_dir : str | None, optional
+        job_dir :  Optional[str], optional
             Directory to save the segmentation results. Defaults to None.
         batch_size : int, optional
             Batch size for processing patches. Defaults to 16.
@@ -338,7 +376,7 @@ class WSI:
         tolerance: float = 0.01
     ) -> Tuple[int, float]:
         """
-        The `get_best_level_and_custom_downsample` function of the class `OpenSlideWSI` determines the best level 
+        The `get_best_level_and_custom_downsample` function of the class `WSI` determines the best level 
         and custom downsample factor to approximate a desired downsample value. It identifies the most suitable 
         resolution level of the WSI and calculates any additional scaling required.
 
@@ -404,7 +442,7 @@ class WSI:
         min_tissue_proportion: float  = 0.,
     ) -> str:
         """
-        The `extract_tissue_coords` function of the class `OpenSlideWSI` extracts patch coordinates 
+        The `extract_tissue_coords` function of the class `WSI` extracts patch coordinates 
         from tissue regions in the WSI. It generates coordinates of patches at the specified 
         magnification and saves the results in an HDF5 file.
 
@@ -471,7 +509,7 @@ class WSI:
 
     def visualize_coords(self, coords_path: str, save_patch_viz: str) -> str:
         """
-        The `visualize_coords` function of the class `OpenSlideWSI` overlays patch coordinates 
+        The `visualize_coords` function of the class `WSI` overlays patch coordinates 
         onto a scaled thumbnail of the WSI. It creates a visualization of the extracted patches 
         and saves it as an image file.
 
@@ -579,7 +617,7 @@ class WSI:
         batch_limit: int = 512
     ) -> str:
         """
-        The `extract_features` function of the class `OpenSlideWSI` extracts feature embeddings 
+        The `extract_features` function of the class `WSI` extracts feature embeddings 
         from the WSI using a specified patch encoder. It processes the patches as specified 
         in the coordinates file and saves the features in the desired format.
 

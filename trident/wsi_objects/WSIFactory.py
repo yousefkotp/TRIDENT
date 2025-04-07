@@ -1,37 +1,64 @@
-import os 
-import importlib.util
+
+import os
+from typing import Optional, Literal, Union
 
 from trident.wsi_objects.OpenSlideWSI import OpenSlideWSI
 from trident.wsi_objects.ImageWSI import ImageWSI
 from trident.wsi_objects.CuCIMWSI import CuCIMWSI
 
-ENABLE_CUCIM = False
-
-# Global variable for OpenSlide-supported extensions
+WSIReaderType = Literal['openslide', 'image', 'cucim']
 OPENSLIDE_EXTENSIONS = {'.svs', '.tif', '.tiff', '.ndpi', '.vms', '.vmu', '.scn', '.mrxs'}
 
-def load_wsi(slide_path: str, **kwargs):
+
+def load_wsi(
+    slide_path: str,
+    reader_type: Optional[WSIReaderType] = None,
+    **kwargs
+) -> Union[OpenSlideWSI, ImageWSI, CuCIMWSI]:
     """
-    Load a whole-slide image using CuCIM for .svs files (if available),
-    otherwise use OpenSlide or fallback to ImageWSI.
+    Load a whole-slide image (WSI) using the appropriate backend.
 
-    Args:
-        slide_path (str): Path to the whole-slide image.
-        **kwargs: Additional arguments passed to the WSI reader.
+    By default, uses OpenSlideWSI for OpenSlide-supported file extensions,
+    and ImageWSI for others. Users may override this behavior by explicitly
+    specifying a reader using the `reader_type` argument.
 
-    Returns:
-        CuCIMWSI, OpenSlideWSI, or ImageWSI instance.
+    Parameters
+    ----------
+    slide_path : str
+        Path to the whole-slide image.
+    reader_type : {'openslide', 'image', 'cucim'}, optional
+        Manually specify the WSI reader to use. If None (default), selection
+        is automatic based on file extension.
+    **kwargs : dict
+        Additional keyword arguments passed to the WSI reader constructor.
+
+    Returns
+    -------
+    Union[OpenSlideWSI, ImageWSI, CuCIMWSI]
+        An instance of the appropriate WSI reader.
+
+    Raises
+    ------
+    ValueError
+        If `reader_type` is 'cucim' but the cucim package is not installed.
+        Or if an unknown reader type is specified.
     """
-    _, ext = os.path.splitext(slide_path)
-    ext = ext.lower()
+    ext = os.path.splitext(slide_path)[1].lower()
 
-    if ENABLE_CUCIM:
-        if ext == '.svs' or ext == '.tiff':
-            cucim_available = importlib.util.find_spec("cucim") is not None
-            if cucim_available:
-                return CuCIMWSI(slide_path=slide_path, **kwargs)
-
-    if ext in OPENSLIDE_EXTENSIONS:
+    if reader_type == 'openslide':
         return OpenSlideWSI(slide_path=slide_path, **kwargs)
-    else:
+
+    elif reader_type == 'image':
         return ImageWSI(slide_path=slide_path, **kwargs)
+
+    elif reader_type == 'cucim':
+        return CuCIMWSI(slide_path=slide_path, **kwargs)
+
+    elif reader_type is None:
+        if ext in OPENSLIDE_EXTENSIONS:
+            return OpenSlideWSI(slide_path=slide_path, **kwargs)
+        else:
+            return ImageWSI(slide_path=slide_path, **kwargs)
+
+    else:
+        raise ValueError(f"Unknown reader_type: {reader_type}. Choose from 'openslide', 'image', or 'cucim'.")
