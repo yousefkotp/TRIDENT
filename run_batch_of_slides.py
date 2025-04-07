@@ -10,6 +10,7 @@ python run_batch_of_slides.py --task all --wsi_dir output/wsis --job_dir output 
 import argparse
 import torch
 from trident import Processor
+from trident import WSIReaderType
 
 
 def parse_arguments():
@@ -23,6 +24,15 @@ def parse_arguments():
                         choices=['cache', 'seg', 'coords', 'feat', 'all'], 
                         help='Task to run: cache, seg (segmentation), coords (save tissue coordinates), img (save tissue images), feat (extract features)')
     parser.add_argument('--job_dir', type=str, required=True, help='Directory to store outputs')
+    parser.add_argument('--wsi_cache', type=str, default=None, 
+                        help='Directory to copy slides to for local processing')
+    parser.add_argument('--clear_cache', action='store_true', default=False, 
+                        help='Delete slides from cache after processing')
+    parser.add_argument('--skip_errors', action='store_true', default=False, 
+                        help='Skip errored slides and continue processing')
+    parser.add_argument('--max_workers', type=int, default=None, help='Maximum number of workers. Set to 0 to use main process.')
+
+    # Slide-related arguments
     parser.add_argument('--wsi_dir', type=str, required=True, 
                         help='Directory containing WSI files (no nesting allowed)')
     parser.add_argument('--wsi_ext', type=str, nargs='+', default=None, 
@@ -31,12 +41,9 @@ def parse_arguments():
                     help='Custom keys used to store the resolution as MPP (micron per pixel) in your list of whole-slide image.')
     parser.add_argument('--custom_list_of_wsis', type=str, default=None,
                     help='Custom list of WSIs specified in a csv file.')
-    parser.add_argument('--wsi_cache', type=str, default=None, 
-                        help='Directory to copy slides to for local processing')
-    parser.add_argument('--clear_cache', action='store_true', default=False, 
-                        help='Delete slides from cache after processing')
-    parser.add_argument('--skip_errors', action='store_true', default=False, 
-                        help='Skip errored slides and continue processing')
+    parser.add_argument('--reader_type', type=str, choices=['openslide', 'image', 'cucim'], default=None,
+                    help='Force the use of a specific WSI image reader. Options are ["openslide", "image", "cucim"]. Defaults to None (auto-determine which reader to use).')
+    
     # Segmentation arguments 
     parser.add_argument('--segmenter', type=str, default='hest', 
                         choices=['hest', 'grandqc'], 
@@ -89,7 +96,9 @@ def initialize_processor(args):
         clear_cache=args.clear_cache,
         skip_errors=args.skip_errors,
         custom_mpp_keys=args.custom_mpp_keys,
-        custom_list_of_wsis=args.custom_list_of_wsis
+        custom_list_of_wsis=args.custom_list_of_wsis,
+        max_workers=args.max_workers,
+        reader_type=args.reader_type
     )
 
 def run_task(processor, args):

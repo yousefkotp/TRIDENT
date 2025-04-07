@@ -59,7 +59,7 @@ class CuCIMWSI(WSI):
         if not self.lazy_init:
             try:
                 self.img = CuImage(self.slide_path)
-                self.dimensions = (self.img.size()[0], self.img.size()[1])  
+                self.dimensions = (self.img.size()[1], self.img.size()[0])  # width, height are reverted compared to openslide!!
                 self.width, self.height = self.dimensions
                 self.level_count = self.img.resolutions['level_count']
                 self.level_downsamples = self.img.resolutions['level_downsamples']
@@ -189,7 +189,8 @@ class CuCIMWSI(WSI):
             size=(level_width, level_height),
             level=level
         ).convert("RGB")
-        region = region.resize((size[1], size[0]), resample=Image.BILINEAR)
+        # region = region.resize((size[1], size[0]), resample=Image.BILINEAR)
+        region = region.resize(size, resample=Image.BILINEAR)
 
         return region
 

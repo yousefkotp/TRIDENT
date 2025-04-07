@@ -11,6 +11,7 @@ from trident.IO import create_lock, remove_lock, is_locked, update_log
 from trident import load_wsi
 from trident.Maintenance import deprecated
 from trident.Converter import OPENSLIDE_EXTENSIONS, PIL_EXTENSIONS
+from trident import WSIReaderType
 
 
 class Processor:
@@ -25,6 +26,7 @@ class Processor:
         custom_mpp_keys: Optional[List[str]] = None,
         custom_list_of_wsis: Optional[str] = None,
         max_workers: Optional[int] = None,
+        reader_type: Optional[WSIReaderType] = None,
     ) -> None:
         """
         The `Processor` class handles all preprocessing steps starting from whole-slide images (WSIs). 
@@ -70,6 +72,9 @@ class Processor:
             max_workers (int, optional):
                 Maximum number of workers for data loading. If None, the default behavior will be used.
                 Defaults to None.
+            reader_type (WSIReaderType, optional):
+                Force the image reader engine to use. Options are are ["openslide", "image", "cucim"]. Defaults to None
+                (auto-determine the right engine based on image extension).
 
         Returns:
             None: This method initializes the class instance and sets up the environment for processing.
@@ -142,7 +147,8 @@ class Processor:
                 tissue_seg_path=tissue_seg_path,
                 custom_mpp_keys=self.custom_mpp_keys,
                 mpp=valid_mpps[wsi_idx] if valid_mpps is not None else None,
-                max_workers=self.max_workers
+                max_workers=self.max_workers,
+                reader_type=reader_type,
             )
             self.wsis.append(slide)
 

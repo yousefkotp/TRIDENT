@@ -1,6 +1,5 @@
 from __future__ import annotations
 import numpy as np
-import openslide
 from PIL import Image
 import os 
 import warnings
