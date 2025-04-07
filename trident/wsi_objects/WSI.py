@@ -166,7 +166,6 @@ class WSI:
         custom_coords:  Optional[np.ndarray] = None,
         threshold: float = 0.15,
         pil: bool = False,
-        device: str = 'cpu',
     ) -> OpenSlideWSIPatcher:
         """
         The `create_patcher` function from the class `WSI` Create a patcher object for extracting patches from the WSI.
@@ -194,7 +193,7 @@ class WSI:
         """
         return OpenSlideWSIPatcher(
             self, patch_size, src_pixel_size, dst_pixel_size, src_mag, dst_mag,
-            overlap, mask, coords_only, custom_coords, threshold, pil, device
+            overlap, mask, coords_only, custom_coords, threshold, pil
         )
     
     def _fetch_magnification(self, custom_mpp_keys: Optional[List[str]] = None) -> int:

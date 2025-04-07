@@ -23,7 +23,6 @@ class OpenSlideWSIPatcher:
         custom_coords = None,
         threshold = 0.,
         pil=False,
-        device: str = 'cpu',
     ):
         """ Initialize patcher, compute number of (masked) rows, columns.
 
@@ -40,7 +39,6 @@ class OpenSlideWSIPatcher:
             threshold (float, optional): minimum proportion of the patch under tissue to be kept.
                 This argument is ignored if mask=None, passing threshold=0 will be faster. Defaults to 0.15
             pil (bool, optional): whenever to get patches as `PIL.Image` (numpy array by default). Defaults to False
-            device (str): Device used for I/O. Defaults to 'cpu'.
         """
         self.wsi = wsi
         self.overlap = overlap
@@ -51,7 +49,6 @@ class OpenSlideWSIPatcher:
         self.coords_only = coords_only
         self.custom_coords = custom_coords
         self.pil = pil
-        self.device = device
         
         # set src magnification and pixel size. 
         if src_pixel_size is not None:
@@ -202,7 +199,6 @@ class OpenSlideWSIPatcher:
             location=(x, y),
             level=self.level,
             size=(self.patch_size_level, self.patch_size_level),
-            device=self.device,
             read_as='pil' if self.pil else 'numpy'
         )
 
