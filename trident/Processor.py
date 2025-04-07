@@ -10,6 +10,7 @@ import geopandas as gpd
 from trident.IO import create_lock, remove_lock, is_locked, update_log
 from trident import load_wsi
 from trident.Maintenance import deprecated
+from trident.Converter import OPENSLIDE_EXTENSIONS, PIL_EXTENSIONS
 
 
 class Processor:
@@ -96,7 +97,7 @@ class Processor:
         self.job_dir = job_dir
         self.wsi_source = wsi_source
         self.wsi_cache = wsi_cache
-        self.wsi_ext = wsi_ext or ['.svs', '.tif', '.dcm', '.vms', '.vmu', '.ndpi', '.scn', '.mrxs', '.tiff', '.svslide', '.bif', '.czi']
+        self.wsi_ext = wsi_ext or (list(PIL_EXTENSIONS) + list(OPENSLIDE_EXTENSIONS))
         self.clear_cache = clear_cache
         self.skip_errors = skip_errors
         self.custom_mpp_keys = custom_mpp_keys

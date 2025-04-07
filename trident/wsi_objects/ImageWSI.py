@@ -40,6 +40,13 @@ class ImageWSI(WSI):
                 "Missing required argument `mpp`. Standard image formats do not contain microns-per-pixel "
                 "information, so you must specify it manually via the `ImageWSI` constructor."
             )
+        
+        #enable loading large images.
+        from PIL import PngImagePlugin
+        PngImagePlugin.MAX_TEXT_CHUNK = 2**30  # ~1GB
+        PngImagePlugin.MAX_TEXT_MEMORY = 2**30
+        PngImagePlugin.MAX_IMAGE_PIXELS = None  # Optional: disables large image warning
+
         self.img = None
         super().__init__(**kwargs)
 
@@ -76,7 +83,8 @@ class ImageWSI(WSI):
             try:
                 self._ensure_image_open()
                 self.level_downsamples = [1]
-                self.width, self.height = self.dimensions
+                self.dimensions = (self.img.width, self.img.height)
+                self.width, self.height = self.dimensions[0], self.dimensions[1]
                 self.mag = self._fetch_magnification(self.custom_mpp_keys)
                 self.dimensions = self.img.size
                 self.level_dimensions = [(self.img.width, self.img.height)]
@@ -88,7 +96,7 @@ class ImageWSI(WSI):
 
     def _ensure_image_open(self):
         if self.img is None:
-            self.img = Image.open(self.slide_path)
+            self.img = Image.open(self.slide_path).convert("RGB")
 
     def get_dimensions(self):
         return self.dimensions
