@@ -23,11 +23,11 @@ class SegmentationModel(torch.nn.Module):
                 param.requires_grad = False
             self.model.eval()
             
-    def forward(self, batch):
+    def forward(self, image):
         """
         Can be overwritten if model requires special forward pass.
         """
-        z = self.model(batch)
+        z = self.model(image)
         return z
         
     @abstractmethod
@@ -37,12 +37,9 @@ class SegmentationModel(torch.nn.Module):
 
 class HESTSegmenter(SegmentationModel):
 
-    def _build(self, device: torch.device):
+    def _build(self):
         """
         Build and load HESTSegmenter model.
-
-        Args:
-            device (torch.device): Device to load the model onto.
 
         Returns:
             Tuple[nn.Module, transforms.Compose]: Model and preprocessing transforms.
@@ -91,10 +88,8 @@ class HESTSegmenter(SegmentationModel):
         }
 
         model.load_state_dict(state_dict)
-        model.to(device)
 
         # Store configuration
-        self.device = device
         self.input_size = 512
         self.precision = torch.float16
         self.target_mag = 10
@@ -110,7 +105,7 @@ class HESTSegmenter(SegmentationModel):
     def forward(self, image: torch.Tensor) -> torch.Tensor:
         # input should be of shape (batch_size, C, H, W)
         assert len(image.shape) == 4, f"Input must be 4D image tensor (shape: batch_size, C, H, W), got {image.shape} instead"
-        logits = self.model(image.to(self.device))['out']
+        logits = self.model(image)['out']
         softmax_output = F.softmax(logits, dim=1)
         predictions = (softmax_output[:, 1, :, :] > self.confidence_thresh).to(torch.uint8)  # Shape: [bs, 512, 512]
         return predictions
@@ -137,7 +132,7 @@ class JpegCompressionTransform:
 
 class GrandQCArtifactSegmenter(SegmentationModel):
 
-    def _build(self, device):
+    def _build(self):
         """
         Load the GrandQC artifact removal segmentation model.
         Credit: https://www.nature.com/articles/s41467-024-54769-y
@@ -188,11 +183,8 @@ class GrandQCArtifactSegmenter(SegmentationModel):
         # Load checkpoint
         state_dict = torch.load(weights_path, map_location='cpu', weights_only=True)
         model.load_state_dict(state_dict)
-        model.to(device)
-        model.eval()
 
         # Model config
-        self.device = device
         self.input_size = 512
         self.precision = torch.float32
         self.target_mag = 10
@@ -220,7 +212,7 @@ class GrandQCArtifactSegmenter(SegmentationModel):
 
 class GrandQCSegmenter(SegmentationModel):
         
-    def _build(self, device):
+    def _build(self):
         """
         Load the GrandQC tissue detection segmentation model.
         Credit: https://www.nature.com/articles/s41467-024-54769-y
@@ -263,11 +255,8 @@ class GrandQCSegmenter(SegmentationModel):
         # Load checkpoint
         state_dict = torch.load(weights_path, map_location='cpu', weights_only=True)
         model.load_state_dict(state_dict)
-        model.to(device)
-        model.eval()
 
         # Model config
-        self.device = device
         self.input_size = 512
         self.precision = torch.float32
         self.target_mag = 1
@@ -298,17 +287,16 @@ class GrandQCSegmenter(SegmentationModel):
 def segmentation_model_factory(
     model_name: str, 
     confidence_thresh: float = 0.5, 
-    device: str = 'cuda', 
     freeze: bool = True
 ) -> SegmentationModel:
     """
     Factory function to build a segmentation model by name.
     """
     if model_name == 'hest':
-        return HESTSegmenter(freeze, confidence_thresh=confidence_thresh, device=device)
+        return HESTSegmenter(freeze, confidence_thresh=confidence_thresh)
     elif model_name == 'grandqc':
-        return GrandQCSegmenter(freeze, confidence_thresh=confidence_thresh, device=device)
+        return GrandQCSegmenter(freeze, confidence_thresh=confidence_thresh)
     elif model_name == 'grandqc_artifact':
-        return GrandQCArtifactSegmenter(freeze, device=device)
+        return GrandQCArtifactSegmenter(freeze)
     else:
         raise ValueError(f"Model type {model_name} not supported")

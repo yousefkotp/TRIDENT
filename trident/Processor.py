@@ -197,7 +197,8 @@ class Processor:
         seg_mag: int = 10, 
         holes_are_tissue: bool = False,
         batch_size: int = 16,
-        artifact_remover_model: torch.nn.Module = None
+        artifact_remover_model: torch.nn.Module = None,
+        device: str = 'cuda:0', 
     ) -> str:
         """
         The `run_segmentation_job` function performs tissue segmentation on all slides managed by the processor. 
@@ -217,6 +218,8 @@ class Processor:
                 The batch size for segmentation. Defaults to 16.
             artifact_remover_model (torch.nn.Module, optional): 
                 A pre-trained PyTorch model that can remove artifacts from an existing segmentation. Defaults to None.
+            device (str): 
+                The computation device to use (e.g., 'cuda:0' for GPU or 'cpu' for CPU).
 
         Returns:
             str: Absolute path to where directory containing contours is saved.
@@ -272,7 +275,8 @@ class Processor:
                     target_mag=seg_mag,
                     holes_are_tissue=holes_are_tissue,
                     job_dir=self.job_dir,
-                    batch_size=batch_size
+                    batch_size=batch_size,
+                    device=device
                 )
 
                 # additionally remove artifacts for better segmentation.
@@ -514,8 +518,6 @@ class Processor:
             ignore = ['patch_encoder', 'loop', 'valid_slides', 'wsis']
         )
 
-        patch_encoder.eval()
-        patch_encoder.to(device)
         log_fp = os.path.join(self.job_dir, coords_dir, f'_logs_feats_{patch_encoder.enc_name}.txt')
         self.loop = tqdm(self.wsis, desc=f'Extracting patch features from coords in {coords_dir}', total = len(self.wsis))
         for wsi in self.loop:    

@@ -116,12 +116,10 @@ def run_task(processor, args):
         segmentation_model = segmentation_model_factory(
             args.segmenter,
             confidence_thresh=args.seg_conf_thresh,
-            device=f'cuda:{args.gpu}'
         )
         if args.remove_artifacts:
             artifact_remover_model = segmentation_model_factory(
                 'grandqc_artifact',
-                device=f'cuda:{args.gpu}'
             )
         else:
             artifact_remover_model = None
@@ -131,7 +129,8 @@ def run_task(processor, args):
             segmentation_model,
             seg_mag=segmentation_model.target_mag,
             holes_are_tissue= not args.remove_holes,
-            artifact_remover_model=artifact_remover_model
+            artifact_remover_model=artifact_remover_model,
+            device=f'cuda:{args.gpu}',
         )
     elif args.task == 'coords':
         # Minimal example for tissue patching:

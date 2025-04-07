@@ -60,12 +60,12 @@ def process_slide(args):
     segmentation_model = segmentation_model_factory(
         model_name=args.segmenter,
         confidence_thresh=args.seg_conf_thresh,
-        device=f"cuda:{args.gpu}"
     )
     slide.segment_tissue(
         segmentation_model=segmentation_model,
         target_mag=segmentation_model.target_mag,
-        job_dir=args.job_dir
+        job_dir=args.job_dir,
+        device=f"cuda:{args.gpu}"
     )
     print(f"Tissue segmentation completed. Results saved to {args.job_dir}contours_geojson and {args.job_dir}contours")
 

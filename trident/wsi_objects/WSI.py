@@ -253,6 +253,7 @@ class WSI:
         holes_are_tissue: bool = True,
         job_dir: Optional[str] = None,
         batch_size: int = 16,
+        device: str = 'cuda:0',
     ) -> str:
         """
         The `segment_tissue` function of the class `WSI` segments tissue regions in the WSI using 
@@ -271,6 +272,9 @@ class WSI:
             Directory to save the segmentation results. Defaults to None.
         batch_size : int, optional
             Batch size for processing patches. Defaults to 16.
+        device (str): 
+            The computation device to use (e.g., 'cuda:0' for GPU or 'cpu' for CPU).
+
 
         Returns:
         --------
@@ -284,6 +288,7 @@ class WSI:
         """
 
         self._lazy_initialize()
+        segmentation_model.to(device)
         max_dimension = 1000
         if self.width > self.height:
             thumbnail_width = max_dimension
@@ -302,7 +307,6 @@ class WSI:
             mask=self.gdf_contours if hasattr(self, "gdf_contours") else None
         )
         precision = segmentation_model.precision
-        device = segmentation_model.device
         eval_transforms = segmentation_model.eval_transforms
         dataset = WSIPatcherDataset(patcher, eval_transforms)
         dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=get_num_workers(batch_size, max_workers=self.max_workers), pin_memory=True)
@@ -615,7 +619,7 @@ class WSI:
         batch_limit: int = 512
     ) -> str:
         """
-        The `extract_features` function of the class `WSI` extracts feature embeddings 
+        The `extract_patch_features` function of the class `WSI` extracts feature embeddings 
         from the WSI using a specified patch encoder. It processes the patches as specified 
         in the coordinates file and saves the features in the desired format.
 
@@ -645,9 +649,11 @@ class WSI:
         >>> print(features_path)
         output_features/sample_name.h5
         """
-        self._lazy_initialize()
 
-        precision = patch_encoder.precision
+        self._lazy_initialize()
+        patch_encoder.to(device)
+        patch_encoder.eval()
+        precision = getattr(patch_encoder, 'precision', torch.float32)
         patch_transforms = patch_encoder.eval_transforms
 
         try:

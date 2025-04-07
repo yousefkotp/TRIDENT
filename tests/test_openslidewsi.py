@@ -53,8 +53,8 @@ class TestOpenSlideWSI(unittest.TestCase):
                 slide = load_wsi(slide_path=slide_path, lazy_init=False)
 
                 # Step 1: Tissue segmentation
-                segmentation_model = segmentation_model_factory("hest", device=self.TEST_DEVICE)
-                slide.segment_tissue(segmentation_model=segmentation_model, target_mag=10, job_dir=self.TEST_OUTPUT_DIR)
+                segmentation_model = segmentation_model_factory("hest")
+                slide.segment_tissue(segmentation_model=segmentation_model, target_mag=10, job_dir=self.TEST_OUTPUT_DIR, device=self.TEST_DEVICE)
 
                 # Step 2: Tissue coordinate extraction
                 coords_path = slide.extract_tissue_coords(
