@@ -29,7 +29,7 @@ class TestSegmentationModels(unittest.TestCase):
         self.dummy_image = Image.fromarray(self.dummy_image)
 
         with torch.inference_mode():
-            dummy_input = encoder.eval_transforms(self.dummy_image).unsqueeze(dim=0)
+            dummy_input = encoder.eval_transforms(self.dummy_image).unsqueeze(dim=0).to(device)
             output = encoder(dummy_input)
 
         self.assertIsNotNone(output)
@@ -39,7 +39,8 @@ class TestSegmentationModels(unittest.TestCase):
     def test_hest(self):
         self._test_forward('hest')
         
-    # Add more segmentation models here
+    def test_grandqc(self):
+        self._test_forward('grandqc')
 
 if __name__ == '__main__':
     unittest.main()

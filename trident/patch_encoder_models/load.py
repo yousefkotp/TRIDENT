@@ -342,14 +342,15 @@ class ResNet50InferenceEncoder(BasePatchEncoder):
 
         self.enc_name = 'resnet50'
         model = timm.create_model("resnet50.tv_in1k", pretrained=pretrained, **timm_kwargs)
-        mean, std = get_constants('imagenet')
-        eval_transform = get_eval_transforms(mean, std, target_img_size=img_size, center_crop = True, interpolation=InterpolationMode.BILINEAR, max_size=None, antialias=True)
 
-        precision = torch.float32
         if pool:
             self.pool = torch.nn.AdaptiveAvgPool2d(1)
         else:
             self.pool = None
+
+        mean, std = get_constants('imagenet')
+        eval_transform = get_eval_transforms(mean, std, target_img_size=img_size, center_crop=True, interpolation=InterpolationMode.BILINEAR, max_size=None, antialias=True)
+        precision = torch.float32
         
         return model, eval_transform, precision
     
@@ -488,8 +489,8 @@ class VirchowInferenceEncoder(BasePatchEncoder):
             **timm_kwargs
         )
         eval_transform = create_transform(**resolve_data_config(model.pretrained_cfg, model=model))
-        precision = torch.float16
         self.return_cls = return_cls
+        precision = torch.float16
         
         return model, eval_transform, precision
         
@@ -525,8 +526,8 @@ class Virchow2InferenceEncoder(BasePatchEncoder):
             **timm_kwargs
         )
         eval_transform = create_transform(**resolve_data_config(model.pretrained_cfg, model=model))
-        precision = torch.float16
         self.return_cls = return_cls
+        precision = torch.float16
         
         return model, eval_transform, precision
 
