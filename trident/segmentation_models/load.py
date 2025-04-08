@@ -58,7 +58,7 @@ class HESTSegmenter(SegmentationModel):
         model = deeplabv3_resnet50(weights=False)
         model.classifier[4] = nn.Conv2d(256, 2, kernel_size=1, stride=1)
 
-        if not os.path.isfile(weights_path):
+        if not weights_path:
             if not SegmentationModel._has_internet:
                 raise FileNotFoundError(
                     f"Internet connection not available and checkpoint not found locally at '{weights_path}' in trident/segmentation_models/local_ckpts.json.\n\n"
@@ -110,6 +110,7 @@ class HESTSegmenter(SegmentationModel):
         predictions = (softmax_output[:, 1, :, :] > self.confidence_thresh).to(torch.uint8)  # Shape: [bs, 512, 512]
         return predictions
         
+
 class JpegCompressionTransform:
     def __init__(self, quality=80):
         self.quality = quality
@@ -132,7 +133,17 @@ class JpegCompressionTransform:
 
 class GrandQCArtifactSegmenter(SegmentationModel):
 
-    def _build(self):
+    _class_mapping = {
+        1: "Normal Tissue",
+        2: "Fold",
+        3: "Darkspot & Foreign Object",
+        4: "PenMarking",
+        5: "Edge & Air Bubble",
+        6: "OOF",
+        7: "Background"
+    }
+
+    def _build(self, remove_penmarks_only=False):
         """
         Load the GrandQC artifact removal segmentation model.
         Credit: https://www.nature.com/articles/s41467-024-54769-y
@@ -140,6 +151,7 @@ class GrandQCArtifactSegmenter(SegmentationModel):
 
         import segmentation_models_pytorch as smp
 
+        self.remove_penmarks_only = remove_penmarks_only  # ignore all other artifacts than penmakrs.
         model_ckpt_name = 'GrandQC_MPP1_state_dict.pth'
         encoder_name = 'timm-efficientnet-b0'
         encoder_weights = 'imagenet'
@@ -160,7 +172,7 @@ class GrandQCArtifactSegmenter(SegmentationModel):
         )
 
         # Attempt to download if file is missing and not already available
-        if not os.path.isfile(weights_path):
+        if not weights_path:
             if not SegmentationModel._has_internet:
                 raise FileNotFoundError(
                     f"Internet connection not available and checkpoint not found locally at '{weights_path}'.\n\n"
@@ -205,8 +217,12 @@ class GrandQCArtifactSegmenter(SegmentationModel):
         logits = self.model.predict(image)
         probs = torch.softmax(logits, dim=1)  
         _, predicted_classes = torch.max(probs, dim=1)  
-        predictions = torch.where(predicted_classes > 1, 0, 1)
+        if self.remove_penmarks_only:
+            predictions = torch.where((predicted_classes == 4) | (predicted_classes == 7), 0, 1)
+        else:
+            predictions = torch.where(predicted_classes > 1, 0, 1)
         predictions = predictions.to(torch.uint8)
+
         return predictions
 
 
@@ -224,8 +240,14 @@ class GrandQCSegmenter(SegmentationModel):
         encoder_weights = 'imagenet'
         weights_path = get_weights_path('seg', 'grandqc') 
 
+        # Verify that user-provided weights_path is valid
+        if weights_path and not os.path.isfile(weights_path):
+            raise FileNotFoundError(
+                f"Expected checkpoint at '{weights_path}', but the file was not found."
+            )
+
         # Verify checkpoint path
-        if not os.path.isfile(weights_path):
+        if not weights_path:
             if not SegmentationModel._has_internet:
                 raise FileNotFoundError(
                     f"Internet connection not available and checkpoint not found locally at '{weights_path}'.\n\n"
@@ -287,16 +309,27 @@ class GrandQCSegmenter(SegmentationModel):
 def segmentation_model_factory(
     model_name: str, 
     confidence_thresh: float = 0.5, 
-    freeze: bool = True
+    freeze: bool = True,
+    **build_kwargs,
 ) -> SegmentationModel:
     """
     Factory function to build a segmentation model by name.
     """
+
+    if "device" in build_kwargs:
+        import warnings
+        warnings.warn(
+            "Passing `device` to `segmentation_model_factory` is deprecated as of version 0.1.0 "
+            "Please pass `device` when segmenting the tissue, e.g., `slide.segment_tissue(..., device='cuda:0')`.",
+            DeprecationWarning,
+            stacklevel=2
+        )
+
     if model_name == 'hest':
-        return HESTSegmenter(freeze, confidence_thresh=confidence_thresh)
+        return HESTSegmenter(freeze, confidence_thresh=confidence_thresh, **build_kwargs)
     elif model_name == 'grandqc':
-        return GrandQCSegmenter(freeze, confidence_thresh=confidence_thresh)
+        return GrandQCSegmenter(freeze, confidence_thresh=confidence_thresh, **build_kwargs)
     elif model_name == 'grandqc_artifact':
-        return GrandQCArtifactSegmenter(freeze)
+        return GrandQCArtifactSegmenter(freeze, **build_kwargs)
     else:
         raise ValueError(f"Model type {model_name} not supported")
