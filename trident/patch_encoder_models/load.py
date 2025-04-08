@@ -5,14 +5,14 @@ import os
 
 from trident.patch_encoder_models.utils.constants import get_constants
 from trident.patch_encoder_models.utils.transform_utils import get_eval_transforms
-from trident.IO import get_weights_path
+from trident.IO import get_weights_path, has_internet_connection
 
 """
 This file contains an assortment of pretrained patch encoders, all loadable via the encoder_factory() function.
 """
 
 def encoder_factory(model_name, **kwargs):
-    '''
+    """
     Build a patch encoder model.
 
     Args:   
@@ -21,7 +21,7 @@ def encoder_factory(model_name, **kwargs):
 
     Returns:
         torch.nn.Module: The patch encoder model.
-    '''
+    """
 
     if model_name == 'conch_v1':
         enc = Conchv1InferenceEncoder
@@ -73,12 +73,26 @@ def encoder_factory(model_name, **kwargs):
 ####################################################################################################
 
 class BasePatchEncoder(torch.nn.Module):
+
+    _has_internet = has_internet_connection()
     
     def __init__(self, **build_kwargs):
         super().__init__()
         self.enc_name = None
         self.model, self.eval_transforms, self.precision = self._build(**build_kwargs)
-        
+    
+    def ensure_valid_weights_path(self, weights_path):
+        if weights_path and not os.path.isfile(weights_path):
+            raise FileNotFoundError(f"Expected checkpoint at '{weights_path}', but the file was not found.")
+    
+    def ensure_has_internet(self, enc_name):
+        if not BasePatchEncoder._has_internet:
+            raise FileNotFoundError(
+                f"Internet connection does seem not available. Auto checkpoint download is disabled."
+                f"To proceed, please manually download: {enc_name},\n"
+                f"and place it in the model registry in:\n`trident/patch_encoder_models/local_ckpts.json`"
+            )
+
     def forward(self, x):
         '''
         Can be overwritten if model requires special forward pass.
@@ -110,6 +124,8 @@ class MuskInferenceEncoder(BasePatchEncoder):
         Args:
             inference_aug (bool): Whether to use test-time multiscale augmentation. Default is False to allow for fair comparison with other models.
         '''
+        import timm
+        
         self.enc_name = 'musk'
         self.inference_aug = inference_aug
         self.with_proj = with_proj
@@ -121,17 +137,23 @@ class MuskInferenceEncoder(BasePatchEncoder):
         except:
             traceback.print_exc()
             raise Exception("Please install MUSK `pip install fairscale git+https://github.com/lilab-stanford/MUSK`")
-        
-        try:
-            from timm.models import create_model
-            model = create_model("musk_large_patch16_384")
-            utils.load_model_and_may_interpolate("hf_hub:xiangjx/musk", model, 'model|module', '')
-        except:
-            traceback.print_exc()
-            raise Exception("Failed to download MUSK model, make sure that you were granted access and that you correctly registered your token")
+
+        weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
+
+        if weights_path:
+            raise NotImplementedError("MUSK doesn't support local model loading. PR welcome!")
+        else:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = timm.create_model("musk_large_patch16_384")
+                utils.load_model_and_may_interpolate("hf_hub:xiangjx/musk", model, 'model|module', '')
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download MUSK model, make sure that you were granted access and that you correctly registered your token")
         
         from timm.data.constants import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
-        from torchvision.transforms import Compose, Resize, InterpolationMode
+        from torchvision.transforms import InterpolationMode
         eval_transform = get_eval_transforms(IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD, target_img_size = 384, center_crop = True, interpolation=InterpolationMode.BICUBIC, antialias=True)
         precision = torch.float16
         
@@ -148,24 +170,31 @@ class MuskInferenceEncoder(BasePatchEncoder):
 
 
 class Conchv1InferenceEncoder(BasePatchEncoder):
-    
-    def _build(self, with_proj = False, normalize = False):
+
+    def _build(self, with_proj=False, normalize=False):
         self.enc_name = 'conch_v1'
         self.with_proj = with_proj
         self.normalize = normalize
+
         try:
             from conch.open_clip_custom import create_model_from_pretrained
         except:
             traceback.print_exc()
             raise Exception("Please install CONCH `pip install git+https://github.com/Mahmoodlab/CONCH.git`")
         
-        try:
-            model, preprocess = create_model_from_pretrained('conch_ViT-B-16', "hf_hub:MahmoodLab/conch")
-        except:
-            traceback.print_exc()
-            raise Exception("Failed to download CONCH model, make sure that you were granted access and that you correctly registered your token")
-        
-        eval_transform = preprocess
+        weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
+
+        if weights_path:
+            model, eval_transform = create_model_from_pretrained('conch_ViT-B-16', checkpoint_path=weights_path)
+        else:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model, eval_transform = create_model_from_pretrained('conch_ViT-B-16', checkpoint_path="hf_hub:MahmoodLab/conch")
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download CONCH v1 model, make sure that you were granted access and that you correctly registered your token")
+    
         precision = torch.float32
         
         return model, eval_transform, precision
@@ -173,10 +202,11 @@ class Conchv1InferenceEncoder(BasePatchEncoder):
     def forward(self, x):
         return self.model.encode_image(x, proj_contrast=self.with_proj, normalize=self.normalize)
     
-    
+
 class CTransPathInferenceEncoder(BasePatchEncoder):
+
     def _build(self):
-        from torchvision.transforms import Compose, Resize, InterpolationMode
+        from torchvision.transforms import InterpolationMode
         from torch import nn
 
         try:
@@ -187,28 +217,25 @@ class CTransPathInferenceEncoder(BasePatchEncoder):
         
         self.enc_name = 'ctranspath'
         weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
         model = ctranspath(img_size=224)
         model.head = nn.Identity()
 
-        weights_dir = os.path.dirname(weights_path)
-        os.makedirs(weights_dir, exist_ok=True)
+        if not weights_path:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                from huggingface_hub import hf_hub_download   
+                weights_path = hf_hub_download(
+                    repo_id="MahmoodLab/hest-bench",
+                    repo_type="dataset",
+                    filename="CHIEF_CTransPath.pth",
+                    subfolder="fm_v1/ctranspath",
+                )
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download CTransPath model, make sure that you were granted access and that you correctly registered your token")
 
-        if not os.path.isfile(weights_path):
-            from huggingface_hub import hf_hub_download   
-            import shutil         
-            downloaded_file_path = hf_hub_download(
-                repo_id="MahmoodLab/hest-bench",
-                repo_type="dataset",
-                filename="CHIEF_CTransPath.pth",
-                subfolder="fm_v1/ctranspath",
-                local_dir=weights_dir,  
-            )
-            shutil.move(downloaded_file_path, weights_path)
-            subfolder_path = os.path.join(weights_dir, "fm_v1", "ctranspath")
-            if os.path.exists(subfolder_path):
-                os.removedirs(subfolder_path)
-
-        state_dict = torch.load(weights_path, weights_only = True)['model']
+        state_dict = torch.load(weights_path, weights_only=True)['model']
         state_dict = {key: val for key, val in state_dict.items() if 'attn_mask' not in key}
         missing, unexpected = model.load_state_dict(state_dict, strict=False)
         assert len(unexpected) == 0, f"Unexpected keys found in state dict: {unexpected}"
@@ -223,20 +250,25 @@ class CTransPathInferenceEncoder(BasePatchEncoder):
 
 
 class PhikonInferenceEncoder(BasePatchEncoder):
+
     def _build(self):
-    
         from transformers import ViTModel
-        from torchvision.transforms import Compose, Resize, InterpolationMode
+        from torchvision.transforms import InterpolationMode
 
         self.enc_name = 'phikon'
         weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
         
-        if os.path.exists(weights_path):
-            model = ViTModel.from_pretrained(weights_path, add_pooling_layer=False)
+        if weights_path:
+            model = ViTModel.from_pretrained(weights_path, add_pooling_layer=False, local_files_only=True)
         else:
-            model = ViTModel.from_pretrained("owkin/phikon", add_pooling_layer=False)
-            os.makedirs(weights_path, exist_ok=True)
-            model.save_pretrained(weights_path)
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = ViTModel.from_pretrained("owkin/phikon", add_pooling_layer=False)
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download Phikon model, make sure that you were granted access and that you correctly registered your token")
+
         mean, std = get_constants('imagenet')
         eval_transform = get_eval_transforms(mean, std, target_img_size=224, interpolation=InterpolationMode.BILINEAR, max_size=None, antialias=True)
         precision = torch.float32
@@ -253,20 +285,32 @@ class PhikonInferenceEncoder(BasePatchEncoder):
     
 
 class HibouLInferenceEncoder(BasePatchEncoder):
-    def _build(self):
 
+    def _build(self):
         from transformers import AutoModel
         from torchvision.transforms import InterpolationMode
 
         self.enc_name = 'hibou_l'
         weights_path = get_weights_path('patch', self.enc_name)
-        
-        if os.path.exists(weights_path):
-            model = AutoModel.from_pretrained(weights_path)
+        self.ensure_valid_weights_path(weights_path)
+
+        if weights_path:
+            model_dir = os.path.dirname(weights_path)
+            required_files = ["model.safetensors", "config.json"]
+            missing_files = [f for f in required_files if not os.path.isfile(os.path.join(model_dir, f))]
+            if missing_files:
+                raise FileNotFoundError(
+                    f"Missing required file(s): {', '.join(missing_files)} in {model_dir}. "
+                    f"These can be downloaded from https://huggingface.co/histai/hibou-L"
+                )
+            model = AutoModel.from_pretrained(model_dir)
         else:
-            model = AutoModel.from_pretrained("histai/hibou-L", trust_remote_code=True)
-            os.makedirs(weights_path, exist_ok=True)
-            model.save_pretrained(weights_path)
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = AutoModel.from_pretrained("histai/hibou-L", trust_remote_code=True)
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download Hibou-L model, make sure that you were granted access and that you correctly registered your token")
         
         mean, std = get_constants('hibou')
         eval_transform = get_eval_transforms(mean, std, target_img_size=224, interpolation=InterpolationMode.BICUBIC, max_size=None, antialias=True)
@@ -282,22 +326,33 @@ class HibouLInferenceEncoder(BasePatchEncoder):
     def forward_features(self, x):
         out = self.model(pixel_values=x)
         return out
-    
+
 
 class KaikoInferenceEncoder(BasePatchEncoder):
     MODEL_NAME = None  # set in subclasses
+    HF_HUB_ID = None # set in subclasses
 
     def _build(self):
+        import timm
         from torchvision.transforms import InterpolationMode
         self.enc_name = f"kaiko-{self.MODEL_NAME}"
         weights_path = get_weights_path("patch", self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
 
-        if os.path.exists(weights_path):
-            model = torch.load(weights_path, map_location="cpu", weights_only=False)
+        if weights_path:
+            model = timm.create_model(f"{self.HF_HUB_ID}", checkpoint_path=weights_path, dynamic_img_size=True)
+            # model.load_state_dict(torch.load(weights_path, map_location="cpu", weights_only=True))
         else:
-            model = torch.hub.load("kaiko-ai/towards_large_pathology_fms", self.MODEL_NAME, trust_repo=True)
-            os.makedirs(os.path.dirname(weights_path), exist_ok=True)
-            torch.save(model, weights_path)
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = timm.create_model(
+                    model_name=f"hf-hub:1aurent/{self.HF_HUB_ID}.kaiko_ai_towards_large_pathology_fms",
+                    dynamic_img_size=True,
+                    pretrained=True,
+                )
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download Kaiko model.")
 
         mean, std = get_constants("kaiko")
         eval_transform = get_eval_transforms(mean, std, target_img_size=224, center_crop=True, interpolation=InterpolationMode.BILINEAR, max_size=None, antialias=True)
@@ -311,22 +366,27 @@ class KaikoInferenceEncoder(BasePatchEncoder):
 
 class KaikoS16InferenceEncoder(KaikoInferenceEncoder):
     MODEL_NAME = "vits16"
+    HF_HUB_ID = "vit_small_patch16_224"
 
 
 class KaikoS8InferenceEncoder(KaikoInferenceEncoder):
     MODEL_NAME = "vits8"
+    HF_HUB_ID = "vit_small_patch8_224"
 
 
 class KaikoB16InferenceEncoder(KaikoInferenceEncoder):
     MODEL_NAME = "vitb16"
+    HF_HUB_ID = "vit_base_patch16_224"
 
 
 class KaikoB8InferenceEncoder(KaikoInferenceEncoder):
     MODEL_NAME = "vitb8"
+    HF_HUB_ID = "vit_base_patch8_224"
 
 
 class KaikoL14InferenceEncoder(KaikoInferenceEncoder):
     MODEL_NAME = "vitl14"
+    HF_HUB_ID = "vit_large_patch14_224"
 
 
 class ResNet50InferenceEncoder(BasePatchEncoder):
@@ -338,19 +398,30 @@ class ResNet50InferenceEncoder(BasePatchEncoder):
         pool=True
     ):
         import timm
-        from torchvision.transforms import Compose, Resize, InterpolationMode
+        from torchvision.transforms import InterpolationMode
 
         self.enc_name = 'resnet50'
-        model = timm.create_model("resnet50.tv_in1k", pretrained=pretrained, **timm_kwargs)
+        weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
 
+        if weights_path:
+            model = timm.create_model("resnet50", pretrained=False, pretrained_cfg_overlay=dict(file=weights_path), **timm_kwargs)
+        else:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = timm.create_model("resnet50.tv_in1k", pretrained=pretrained, **timm_kwargs)
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download ResNet50 model.")
+
+        mean, std = get_constants('imagenet')
+        eval_transform = get_eval_transforms(mean, std, target_img_size=img_size, center_crop=True, interpolation=InterpolationMode.BILINEAR, max_size=None, antialias=True)
+
+        precision = torch.float32
         if pool:
             self.pool = torch.nn.AdaptiveAvgPool2d(1)
         else:
             self.pool = None
-
-        mean, std = get_constants('imagenet')
-        eval_transform = get_eval_transforms(mean, std, target_img_size=img_size, center_crop=True, interpolation=InterpolationMode.BILINEAR, max_size=None, antialias=True)
-        precision = torch.float32
         
         return model, eval_transform, precision
     
@@ -366,20 +437,29 @@ class ResNet50InferenceEncoder(BasePatchEncoder):
             assert len(out) == 1
             out = out[0]
         return out
-                     
+
 
 class LunitS8InferenceEncoder(BasePatchEncoder):
+
     def _build(self):
         import timm
         from timm.data import resolve_model_data_config
         from timm.data.transforms_factory import create_transform
 
         self.enc_name = 'lunit-vits8'
-
-        model = timm.create_model(
-            model_name="hf-hub:1aurent/vit_small_patch8_224.lunit_dino",
-            pretrained=True,
-        )
+        weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
+        
+        if weights_path:
+            timm_kwargs = {"img_size": 224}
+            model = timm.create_model("vit_small_patch8_224", checkpoint_path=weights_path, **timm_kwargs)
+        else:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = timm.create_model("hf-hub:1aurent/vit_small_patch8_224.lunit_dino", pretrained=True)
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download Lunit S8 model, make sure that you were granted access and that you correctly registered your token.")
 
         data_config = resolve_model_data_config(model)
         eval_transform = create_transform(**data_config, is_training=False)
@@ -398,25 +478,35 @@ class UNIInferenceEncoder(BasePatchEncoder):
         from timm.data.transforms_factory import create_transform
 
         self.enc_name = 'uni_v1'
-        
-        try:
-            model = timm.create_model("hf-hub:MahmoodLab/uni", pretrained=True, **timm_kwargs)
-        except:
-            traceback.print_exc()
-            raise Exception("Failed to download UNI model, make sure that you were granted access and that you correctly registered your token")
-        
+        weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
+
+        if weights_path:
+            model = timm.create_model("vit_large_patch16_224", **timm_kwargs)
+            model.load_state_dict(torch.load(weights_path, map_location="cpu"), strict=True)
+        else:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = timm.create_model("hf-hub:MahmoodLab/uni", pretrained=True, **timm_kwargs)
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download UNI model, make sure that you were granted access and that you correctly registered your token")
+
         eval_transform = create_transform(**resolve_data_config(model.pretrained_cfg, model=model))
         precision = torch.float16
         return model, eval_transform, precision
     
-    
+
 class UNIv2InferenceEncoder(BasePatchEncoder):
+
     def _build(self):
         import timm
         from timm.data import resolve_data_config
         from timm.data.transforms_factory import create_transform
         
         self.enc_name = 'uni_v2'
+        weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
         
         timm_kwargs = {
             'img_size': 224, 
@@ -433,28 +523,57 @@ class UNIv2InferenceEncoder(BasePatchEncoder):
             'reg_tokens': 8, 
             'dynamic_img_size': True
         }
-        try:
-            model = timm.create_model("hf-hub:MahmoodLab/UNI2-h", pretrained=True, **timm_kwargs)
-        except:
-            traceback.print_exc()
-            raise Exception("Failed to download UNI model, make sure that you were granted access and that you correctly registered your token")
-        
+
+        if weights_path:
+            model = timm.create_model(model_name='vit_giant_patch14_224', pretrained=False, **timm_kwargs)
+            model.load_state_dict(torch.load(weights_path, map_location="cpu"), strict=True)
+        else:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = timm.create_model("hf-hub:MahmoodLab/UNI2-h", pretrained=True, **timm_kwargs)
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download UNI v2 model, make sure that you were granted access and that you correctly registered your token")
+
         eval_transform = create_transform(**resolve_data_config(model.pretrained_cfg, model=model))
         precision = torch.bfloat16
         return model, eval_transform, precision
     
 
 class GigaPathInferenceEncoder(BasePatchEncoder):
+
     def _build(
         self, 
-        timm_kwargs={}):
+    ):
         import timm
         assert timm.__version__ == '0.9.16', f"Gigapath requires timm version 0.9.16, but found {timm.__version__}. Please install the correct version using `pip install timm==0.9.16`"
         from torchvision import transforms
 
         self.enc_name = 'gigapath'
+        weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
         
-        model = timm.create_model("hf_hub:prov-gigapath/prov-gigapath", pretrained=True, **timm_kwargs)
+        if weights_path:
+            timm_kwargs = {
+                "img_size": 224,
+                "in_chans": 3,
+                "patch_size": 16,
+                "embed_dim": 1536,
+                "depth": 40,
+                "num_heads": 24,
+                "mlp_ratio": 5.33334,
+                "num_classes": 0
+            }
+            model = timm.create_model("vit_giant_patch14_dinov2", pretrained=False, **timm_kwargs)
+            model.load_state_dict(torch.load(weights_path, map_location="cpu"), strict=True)
+        else:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = timm.create_model("hf_hub:prov-gigapath/prov-gigapath", pretrained=True)
+                import pdb; pdb.set_trace()
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download GigaPath model, make sure that you were granted access and that you correctly registered your token")
 
         mean, std = get_constants('imagenet')
         eval_transform = transforms.Compose(
@@ -467,7 +586,7 @@ class GigaPathInferenceEncoder(BasePatchEncoder):
         )
         precision = torch.float32
         return model, eval_transform, precision
-    
+
     
 class VirchowInferenceEncoder(BasePatchEncoder):
     import timm
@@ -482,18 +601,36 @@ class VirchowInferenceEncoder(BasePatchEncoder):
         from timm.data.transforms_factory import create_transform
 
         self.enc_name = 'virchow'
+        weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
+        
+        if weights_path:
+            timm_kwargs = {
+                "img_size": 224,
+                "init_values": 1e-5,
+                "num_classes": 0,
+                "mlp_ratio": 5.3375,
+                "global_pool": "",
+                "dynamic_img_size": True,
+                'mlp_layer': timm.layers.SwiGLUPacked,
+                'act_layer': torch.nn.SiLU,
+            }
+            model = timm.create_model("vit_huge_patch14_224", **timm_kwargs)
+            model.load_state_dict(torch.load(weights_path, map_location="cpu"), strict=True)
+        else:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = timm.create_model("hf-hub:paige-ai/Virchow", pretrained=True, **timm_kwargs)
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download Virchow model, make sure that you were granted access and that you correctly registered your token")
 
-        model = timm.create_model(
-            "hf-hub:paige-ai/Virchow",
-            pretrained=True,
-            **timm_kwargs
-        )
         eval_transform = create_transform(**resolve_data_config(model.pretrained_cfg, model=model))
-        self.return_cls = return_cls
         precision = torch.float16
+        self.return_cls = return_cls
         
         return model, eval_transform, precision
-        
+
     def forward(self, x):
         output = self.model(x)
         class_token = output[:, 0]
@@ -504,7 +641,7 @@ class VirchowInferenceEncoder(BasePatchEncoder):
             patch_tokens = output[:, 1:]
             embeddings = torch.cat([class_token, patch_tokens.mean(1)], dim=-1)
             return embeddings
-        
+
 
 class Virchow2InferenceEncoder(BasePatchEncoder):
     import timm
@@ -519,15 +656,34 @@ class Virchow2InferenceEncoder(BasePatchEncoder):
         from timm.data.transforms_factory import create_transform
 
         self.enc_name = 'virchow2'
-
-        model = timm.create_model(
-            "hf-hub:paige-ai/Virchow2",
-            pretrained=True,
-            **timm_kwargs
-        )
+        weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
+        
+        if weights_path:
+            timm_kwargs = {
+                "img_size": 224,
+                "init_values": 1e-5,
+                "num_classes": 0,
+                "reg_tokens": 4,
+                "mlp_ratio": 5.3375,
+                "global_pool": "",
+                "dynamic_img_size": True,
+                'mlp_layer': timm.layers.SwiGLUPacked,
+                'act_layer': torch.nn.SiLU,
+            }
+            model = timm.create_model("vit_huge_patch14_224", **timm_kwargs)
+            model.load_state_dict(torch.load(weights_path, map_location="cpu"), strict=True)
+        else:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = timm.create_model("hf-hub:paige-ai/Virchow2", pretrained=True, **timm_kwargs)
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download Virchow-2 model, make sure that you were granted access and that you correctly registered your token")
+        
         eval_transform = create_transform(**resolve_data_config(model.pretrained_cfg, model=model))
-        self.return_cls = return_cls
         precision = torch.float16
+        self.return_cls = return_cls
         
         return model, eval_transform, precision
 
@@ -544,7 +700,7 @@ class Virchow2InferenceEncoder(BasePatchEncoder):
 
 
 class HOptimus0InferenceEncoder(BasePatchEncoder):
-    
+
     def _build(
         self,
         timm_kwargs={'init_values': 1e-5, 'dynamic_img_size': False}
@@ -554,8 +710,26 @@ class HOptimus0InferenceEncoder(BasePatchEncoder):
         from torchvision import transforms
 
         self.enc_name = 'hoptimus0'
-
-        model = timm.create_model("hf-hub:bioptimus/H-optimus-0", pretrained=True, **timm_kwargs)
+        weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
+        
+        if weights_path:
+            timm_kwargs = {
+                "num_classes": 0,
+                "img_size": 224,
+                "global_pool": "token",
+                'init_values': 1e-5,
+                'dynamic_img_size': False
+            }
+            model = timm.create_model("vit_giant_patch14_reg4_dinov2", **timm_kwargs)
+            model.load_state_dict(torch.load(weights_path, map_location="cpu"), strict=True)
+        else:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = timm.create_model("hf-hub:bioptimus/H-optimus-0", pretrained=True, **timm_kwargs)
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download HOptimus-0 model, make sure that you were granted access and that you correctly registered your token")
 
         eval_transform = transforms.Compose([
             transforms.Resize(224),  
@@ -571,7 +745,6 @@ class HOptimus0InferenceEncoder(BasePatchEncoder):
 
 
 class HOptimus1InferenceEncoder(BasePatchEncoder):
-    
     def _build(
         self,
         timm_kwargs={'init_values': 1e-5, 'dynamic_img_size': False},
@@ -582,7 +755,26 @@ class HOptimus1InferenceEncoder(BasePatchEncoder):
         from torchvision import transforms
 
         self.enc_name = 'hoptimus1'
-        model = timm.create_model("hf-hub:bioptimus/H-optimus-1", pretrained=True, **timm_kwargs)
+        weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
+        
+        if weights_path:
+            timm_kwargs = {
+                "num_classes": 0,
+                "img_size": 224,
+                "global_pool": "token",
+                'init_values': 1e-5,
+                'dynamic_img_size': False
+            }
+            model = timm.create_model("vit_giant_patch14_reg4_dinov2", **timm_kwargs)
+            model.load_state_dict(torch.load(weights_path, map_location="cpu"), strict=True)
+        else:
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = timm.create_model("hf-hub:bioptimus/H-optimus-1", pretrained=True, **timm_kwargs)
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download HOptimus-1 model, make sure that you were granted access and that you correctly registered your token")
 
         eval_transform = transforms.Compose([
             transforms.Resize(224),  
@@ -598,21 +790,33 @@ class HOptimus1InferenceEncoder(BasePatchEncoder):
 
 
 class Phikonv2InferenceEncoder(BasePatchEncoder):
-    def _build(self):
 
+    def _build(self):
         from transformers import AutoModel
         import torchvision.transforms as T
         from .utils.constants import IMAGENET_MEAN, IMAGENET_STD
 
         self.enc_name = 'phikon_v2'
         weights_path = get_weights_path('patch', self.enc_name)
+        self.ensure_valid_weights_path(weights_path)
         
-        if os.path.exists(weights_path):
-            model = AutoModel.from_pretrained(weights_path)
+        if weights_path:
+            model_dir = os.path.dirname(weights_path)
+            required_files = ["model.safetensors", "config.json"]
+            missing_files = [f for f in required_files if not os.path.isfile(os.path.join(model_dir, f))]
+            if missing_files:
+                raise FileNotFoundError(
+                    f"Missing required file(s): {', '.join(missing_files)} in {model_dir}. "
+                    f"These can be downloaded from https://huggingface.co/owkin/phikon-v2"
+                )
+            model = AutoModel.from_pretrained(model_dir)
         else:
-            model = AutoModel.from_pretrained("owkin/phikon-v2")
-            os.makedirs(weights_path, exist_ok=True)
-            model.save_pretrained(weights_path)
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model = AutoModel.from_pretrained("owkin/phikon-v2")
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download Phikon v2 model, make sure that you were granted access and that you correctly registered your token")
 
         eval_transform = T.Compose([
             T.Resize(224),  
@@ -631,21 +835,24 @@ class Phikonv2InferenceEncoder(BasePatchEncoder):
 
 
 class Conchv15InferenceEncoder(BasePatchEncoder):
-    def _build(self, img_size = 448):
 
+    def _build(self, img_size=448):
         from trident.patch_encoder_models.model_zoo.conchv1_5.conchv1_5 import create_model_from_pretrained
 
         self.enc_name = 'conch_v15'
         weights_path = get_weights_path('patch', self.enc_name)
-        weights_dir = os.path.dirname(weights_path)
-        os.makedirs(weights_dir, exist_ok=True)
+        self.ensure_valid_weights_path(weights_path)
 
-        if os.path.isfile(weights_path):
+        if weights_path:
             model, eval_transform = create_model_from_pretrained(checkpoint_path=weights_path, img_size=img_size)
         else:
-            print("Downloading model weights from HuggingFace...")
-            model, eval_transform = create_model_from_pretrained(checkpoint_path="hf_hub:MahmoodLab/conchv1_5", img_size=img_size)
-            torch.save(model.state_dict(), weights_path)
+            self.ensure_has_internet(self.enc_name)
+            try:
+                model, eval_transform = create_model_from_pretrained(checkpoint_path="hf_hub:MahmoodLab/conchv1_5", img_size=img_size)
+            except:
+                traceback.print_exc()
+                raise Exception("Failed to download CONCH v1.5 model, make sure that you were granted access and that you correctly registered your token")
 
         precision = torch.float16
         return model, eval_transform, precision
+
