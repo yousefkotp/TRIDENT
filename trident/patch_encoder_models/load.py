@@ -584,7 +584,6 @@ class GigaPathInferenceEncoder(BasePatchEncoder):
             self.ensure_has_internet(self.enc_name)
             try:
                 model = timm.create_model("hf_hub:prov-gigapath/prov-gigapath", pretrained=True)
-                import pdb; pdb.set_trace()
             except:
                 traceback.print_exc()
                 raise Exception("Failed to download GigaPath model, make sure that you were granted access and that you correctly registered your token")
