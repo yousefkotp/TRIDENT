@@ -119,7 +119,7 @@ class CustomInferenceEncoder(BasePatchEncoder):
 
 class MuskInferenceEncoder(BasePatchEncoder):
     
-    def _build(self, inference_aug = False, with_proj = False, out_norm = False, return_global = True):
+    def _build(self, inference_aug=False, with_proj=False, out_norm=False, return_global=True):
         '''
         Args:
             inference_aug (bool): Whether to use test-time multiscale augmentation. Default is False to allow for fair comparison with other models.
@@ -260,7 +260,8 @@ class PhikonInferenceEncoder(BasePatchEncoder):
         self.ensure_valid_weights_path(weights_path)
         
         if weights_path:
-            model = ViTModel.from_pretrained(weights_path, add_pooling_layer=False, local_files_only=True)
+            model_dir = os.path.dirname(weights_path)
+            model = ViTModel.from_pretrained(model_dir, add_pooling_layer=False, local_files_only=True)
         else:
             self.ensure_has_internet(self.enc_name)
             try:
@@ -331,6 +332,7 @@ class HibouLInferenceEncoder(BasePatchEncoder):
 class KaikoInferenceEncoder(BasePatchEncoder):
     MODEL_NAME = None  # set in subclasses
     HF_HUB_ID = None # set in subclasses
+    IMG_SIZE = None
 
     def _build(self):
         import timm
@@ -340,8 +342,13 @@ class KaikoInferenceEncoder(BasePatchEncoder):
         self.ensure_valid_weights_path(weights_path)
 
         if weights_path:
-            model = timm.create_model(f"{self.HF_HUB_ID}", checkpoint_path=weights_path, dynamic_img_size=True)
-            # model.load_state_dict(torch.load(weights_path, map_location="cpu", weights_only=True))
+            model = timm.create_model(
+                f"{self.HF_HUB_ID}",
+                num_classes=0,
+                checkpoint_path=weights_path,
+                img_size=self.IMG_SIZE,
+                dynamic_img_size=True
+            )
         else:
             self.ensure_has_internet(self.enc_name)
             try:
@@ -349,6 +356,8 @@ class KaikoInferenceEncoder(BasePatchEncoder):
                     model_name=f"hf-hub:1aurent/{self.HF_HUB_ID}.kaiko_ai_towards_large_pathology_fms",
                     dynamic_img_size=True,
                     pretrained=True,
+                    num_classes=0,
+                    img_size=self.IMG_SIZE,
                 )
             except:
                 traceback.print_exc()
@@ -367,26 +376,31 @@ class KaikoInferenceEncoder(BasePatchEncoder):
 class KaikoS16InferenceEncoder(KaikoInferenceEncoder):
     MODEL_NAME = "vits16"
     HF_HUB_ID = "vit_small_patch16_224"
+    IMG_SIZE = 224
 
 
 class KaikoS8InferenceEncoder(KaikoInferenceEncoder):
     MODEL_NAME = "vits8"
     HF_HUB_ID = "vit_small_patch8_224"
+    IMG_SIZE = 224
 
 
 class KaikoB16InferenceEncoder(KaikoInferenceEncoder):
     MODEL_NAME = "vitb16"
     HF_HUB_ID = "vit_base_patch16_224"
+    IMG_SIZE = 224
 
 
 class KaikoB8InferenceEncoder(KaikoInferenceEncoder):
     MODEL_NAME = "vitb8"
     HF_HUB_ID = "vit_base_patch8_224"
+    IMG_SIZE = 224
 
 
 class KaikoL14InferenceEncoder(KaikoInferenceEncoder):
     MODEL_NAME = "vitl14"
-    HF_HUB_ID = "vit_large_patch14_224"
+    HF_HUB_ID = "vit_large_patch14_reg4_dinov2"
+    IMG_SIZE = 518
 
 
 class ResNet50InferenceEncoder(BasePatchEncoder):
