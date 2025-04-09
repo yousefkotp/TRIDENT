@@ -73,6 +73,16 @@ def parse_arguments():
                                  'kaiko-vits8', 'kaiko-vits16', 'kaiko-vitb8', 'kaiko-vitb16',
                                  'kaiko-vitl14', 'lunit-vits8'],
                         help='Patch encoder to use')
+    parser.add_argument(
+        '--patch_encoder_ckpt_path', type=str, default=None,
+        help=(
+            "Optional local path to a patch encoder checkpoint (.pt, .pth, .bin, or .safetensors). "
+            "This is only needed in offline environments (e.g., compute clusters without internet). "
+            "If not provided, models are downloaded automatically from Hugging Face. "
+            "You can also specify local paths via the model registry at "
+            "`./trident/patch_encoder_models/local_ckpts.json`."
+        )
+    )
     parser.add_argument('--slide_encoder', type=str, default=None, 
                         choices=['threads', 'titan', 'prism', 'gigapath', 'chief', 'madeleine',
                                  'mean-virchow', 'mean-virchow2', 'mean-conch_v1', 'mean-conch_v15', 'mean-ctranspath',
@@ -147,7 +157,7 @@ def run_task(processor, args):
             # Minimal example for feature extraction:
             # python run_batch_of_slides.py --task feat --wsi_dir wsis --job_dir trident_processed --patch_encoder uni_v1 --mag 20 --patch_size 256
             from trident.patch_encoder_models.load import encoder_factory
-            encoder = encoder_factory(args.patch_encoder)
+            encoder = encoder_factory(args.patch_encoder, weights_path=args.patch_encoder_ckpt_path)
             processor.run_patch_feature_extraction_job(
                 coords_dir=args.coords_dir or f'{args.mag}x_{args.patch_size}px_{args.overlap}px_overlap',
                 patch_encoder=encoder,

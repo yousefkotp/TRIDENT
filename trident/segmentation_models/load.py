@@ -35,6 +35,7 @@ class SegmentationModel(torch.nn.Module):
         """Build the segmentation model and preprocessing transforms."""
         pass
 
+
 class HESTSegmenter(SegmentationModel):
 
     def _build(self):
@@ -61,7 +62,7 @@ class HESTSegmenter(SegmentationModel):
         if not weights_path:
             if not SegmentationModel._has_internet:
                 raise FileNotFoundError(
-                    f"Internet connection not available and checkpoint not found locally at '{weights_path}' in trident/segmentation_models/local_ckpts.json.\n\n"
+                    f"Internet connection not available and checkpoint not found locally in model registry at trident/segmentation_models/local_ckpts.json.\n\n"
                     f"To proceed, please manually download {model_ckpt_name} from:\n"
                     f"https://huggingface.co/MahmoodLab/hest-tissue-seg/\n"
                     f"and place it at:\nlocal_ckpts.json"
@@ -175,7 +176,7 @@ class GrandQCArtifactSegmenter(SegmentationModel):
         if not weights_path:
             if not SegmentationModel._has_internet:
                 raise FileNotFoundError(
-                    f"Internet connection not available and checkpoint not found locally at '{weights_path}'.\n\n"
+                    f"Internet connection not available and checkpoint not found locally.\n\n"
                     f"To proceed, please manually download {model_ckpt_name} from:\n"
                     f"https://huggingface.co/MahmoodLab/hest-tissue-seg/\n"
                     f"and place it at:\nlocal_ckpts.json"

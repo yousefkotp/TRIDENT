@@ -538,7 +538,7 @@ class Processor:
 
             # Check if coords exist
             coords_path = os.path.join(self.job_dir, coords_dir, 'patches', f'{wsi.name}_patches.h5')
-            if not os.path.exists(coords_path) and not os.path.exists(coords_path):
+            if not os.path.exists(coords_path):
                 self.loop.set_postfix_str(f'Coords not found for {wsi.name}. Skipping...')
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Coords not found.')
                 continue
