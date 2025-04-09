@@ -8,7 +8,7 @@ from trident.wsi_objects.CuCIMWSI import CuCIMWSI
 
 WSIReaderType = Literal['openslide', 'image', 'cucim']
 OPENSLIDE_EXTENSIONS = {'.svs', '.tif', '.tiff', '.ndpi', '.vms', '.vmu', '.scn', '.mrxs'}
-
+CUCIM_EXTENSIONS = {'.svs', '.tif', '.tiff'}
 
 def load_wsi(
     slide_path: str,
@@ -52,7 +52,13 @@ def load_wsi(
         return ImageWSI(slide_path=slide_path, **kwargs)
 
     elif reader_type == 'cucim':
-        return CuCIMWSI(slide_path=slide_path, **kwargs)
+        if ext in CUCIM_EXTENSIONS:
+            return CuCIMWSI(slide_path=slide_path, **kwargs)
+        else:
+            raise ValueError(
+                f"Unsupported file format '{ext}' for CuCIM. "
+                f"Supported whole-slide image formats are: {', '.join(CUCIM_EXTENSIONS)}."
+            )
 
     elif reader_type is None:
         if ext in OPENSLIDE_EXTENSIONS:
