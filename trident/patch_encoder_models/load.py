@@ -1059,74 +1059,125 @@ class Conchv15InferenceEncoder(BasePatchEncoder):
 
 
 class RadioInferenceEncoder(BasePatchEncoder):
-    def __init__(
-        self, weights_path: Optional[str] = None, return_spatial: bool = False, **build_kwargs
+    """
+    RADIO encoder that loads the model from NVlabs/RADIO via torch.hub and includes its own
+    evaluation transform logic. All RADIO-specific logic and imports are contained within this class.
+
+    Args:
+        return_spatial (bool): If True, the forward pass returns the full tuple
+            (summary, spatial_features). Otherwise, only the summary (the unified image embedding) is returned.
+        weights_path (Optional[str]): Not supported for RADIO; must be None.
+        **kwargs: Additional keyword arguments (e.g. model_version) passed to _build.
+    """
+
+    def __init__(self, return_spatial: bool = False, weights_path: Optional[str] = None, **kwargs):
+        self.return_spatial = return_spatial
+        super().__init__(weights_path=weights_path, **kwargs)
+
+    @staticmethod
+    def _get_eval_transform(
+        preferred_resolution, max_resolution: Optional[int] = None
     ):
         """
-        Initialize the RADIO encoder.
+        Returns a torchvision Compose transform that:
+          1. Optionally downsizes the input image if its longer side exceeds `max_resolution`.
+          2. Resizes the image so that its shorter side equals preferred_resolution[0] (preserving aspect ratio)
+          3. Center-crops the image to a square with dimensions preferred_resolution[0] x preferred_resolution[1]
+          4. Converts the image to a tensor with pixel values scaled to [0, 1].
 
         Args:
-            weights_path (Optional[str]): Should not be provided since RADIO doesn't support local loading.
-            return_spatial (bool): If True, the forward pass will return the full tuple
-                                   (summary, spatial_features). If False (default), only summary
-                                   is returned as the image embedding.
-            **build_kwargs: Additional keyword arguments.
+            preferred_resolution (Tuple[int, int]): The target (height, width), e.g. (768, 768).
+            max_resolution (Optional[int]): Maximum allowed size for the longer side (e.g. 2048). If None, no cap is applied.
         """
-        self.return_spatial = return_spatial
-        super().__init__(weights_path, **build_kwargs)
+        from PIL import Image
+        from torchvision.transforms import Compose, Resize, CenterCrop, ToTensor, InterpolationMode
+
+        transforms_list = []
+
+        # If the longer side exceeds max_resolution, first downscale.
+        if max_resolution is not None:
+            # This lambda computes a scaling factor to cap the longer side
+            transforms_list.append(
+                lambda img: img.resize(
+                    tuple(
+                        int(round(dim * min(1.0, max_resolution / max(img.size))))
+                        for dim in img.size
+                    ),
+                    resample=Image.BICUBIC,
+                )
+            )
+        # Resize the image so that the shorter side equals the preferred resolution.
+        transforms_list.append(
+            Resize(preferred_resolution[0], interpolation=InterpolationMode.BICUBIC)
+        )
+        # Center-crop the image to obtain a square.
+        transforms_list.append(CenterCrop(preferred_resolution))
+        # Convert to tensor with pixel values in [0,1].
+        transforms_list.append(ToTensor())
+
+        return Compose(transforms_list)
 
     def _build(self, model_version: str = "radio_v2.5-h", **build_kwargs):
         """
-        Build the RADIO model by downloading it via torch.hub.
+        Builds the RADIO model by:
+          1. Loading it from torch.hub from the 'NVlabs/RADIO' repository.
+          2. Creating an evaluation transform for pre-processing input images.
+          3. Returning the model, transform, and precision.
 
         Args:
-            model_version (str): Specifies which RADIO model version to load. Default is "radio_v2.5-h".
-            **build_kwargs: Additional kwargs (unused).
+            model_version (str): Version of the model to load (e.g., "radio_v2.5-h").
+            **build_kwargs: Other keyword arguments (if any).
 
         Returns:
-            A tuple: (model, eval_transform, precision)
+            Tuple[torch.nn.Module, torchvision.transforms.Compose, torch.dtype]:
+              - The RADIO model.
+              - The evaluation transform.
+              - The precision (torch.float32).
         """
+        import traceback
+        import torch
+
         self.enc_name = "radio"
 
-        # RADIO does not support local weight loading.
-        if self.weights_path:
+        # RADIO does not support local weights.
+        if self.weights_path is not None:
             raise NotImplementedError(
-                "RADIO model doesn't support loading local weights. "
-                "Please rely on the auto-download functionality via the internet."
+                "RADIO does not support local weight loading. Please use an internet connection."
             )
+
+        self.ensure_has_internet(self.enc_name)
+        try:
+            model = torch.hub.load(
+                "NVlabs/RADIO",  # Repository
+                "radio_model",  # Model hook in the repo
+                version=model_version,  # E.g., "radio_v2.5-h"
+                progress=True,
+                skip_validation=True,
+            )
+        except Exception:
+            traceback.print_exc()
+            raise Exception(
+                "Failed to download the RADIO model. Check your internet connection and access permissions."
+            )
+
+        # Use model-defined properties if available.
+        if hasattr(model, "preferred_resolution"):
+            preferred_resolution = (
+                model.preferred_resolution
+            )  # Expected to be a tuple, e.g. (768, 768)
         else:
-            self.ensure_has_internet(self.enc_name)
-            try:
-                import torch
+            preferred_resolution = (768, 768)
+        if hasattr(model, "max_resolution"):
+            max_resolution = model.max_resolution  # Expected to be an int, e.g. 2048
+        else:
+            max_resolution = 2048
 
-                model = torch.hub.load(
-                    "NVlabs/RADIO",  # Repository from NVlabs
-                    "radio_model",  # The callable/model hook in that repo
-                    version=model_version,  # Specify the model version (e.g., "radio_v2.5-h")
-                    progress=True,
-                    skip_validation=True,  # Skips additional validations
-                )
-            except Exception:
-                import traceback
-
-                traceback.print_exc()
-                raise Exception(
-                    "Failed to download the RADIO model. "
-                    "Check your internet connection and access permissions."
-                )
-
-        # Define a basic evaluation transform: Converts an image to a tensor.
-        import torchvision.transforms as T
-
-        eval_transform = T.Compose(
-            [
-                T.ToTensor(),
-            ]
+        # Get the evaluation transform (all within this class).
+        eval_transform = RadioInferenceEncoder._get_eval_transform(
+            preferred_resolution, max_resolution
         )
 
-        # RADIO models operate in float32 by default.
         precision = torch.float32
-
         return model, eval_transform, precision
 
     def forward(self, x):
@@ -1134,15 +1185,14 @@ class RadioInferenceEncoder(BasePatchEncoder):
         Forward pass for RADIO.
 
         Args:
-            x (torch.Tensor): Input tensor with image values in the [0, 1] range.
+            x (torch.Tensor): A batch of pre-processed images.
 
         Returns:
-            If `self.return_spatial` is False (default), returns only the image embedding (summary) as a tensor.
-            If `self.return_spatial` is True, returns the full output tuple (summary, spatial_features) from RADIO.
+            torch.Tensor: If return_spatial is False, returns the summary token (image embedding).
+                          Otherwise, returns the full tuple (summary, spatial_features).
         """
         output = self.model(x)
         if self.return_spatial:
             return output
         else:
-            # Return only the summary representation as the unified image embedding.
             return output[0]
