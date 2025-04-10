@@ -1059,51 +1059,63 @@ class Conchv15InferenceEncoder(BasePatchEncoder):
 
 
 class RadioInferenceEncoder(BasePatchEncoder):
-    def _build(self, model_version="radio_v2.5-h", **build_kwargs):
+    def __init__(
+        self, weights_path: Optional[str] = None, return_spatial: bool = False, **build_kwargs
+    ):
         """
-        Build the RADIO encoder.
+        Initialize the RADIO encoder.
 
         Args:
-            model_version (str): Specifies which RADIO model version to load.
-                                 Example: "radio_v2.5-h" for the ViT-H/16 version.
-            **build_kwargs: Additional parameters (not used here) for compatibility.
+            weights_path (Optional[str]): Should not be provided since RADIO doesn't support local loading.
+            return_spatial (bool): If True, the forward pass will return the full tuple
+                                   (summary, spatial_features). If False (default), only summary
+                                   is returned as the image embedding.
+            **build_kwargs: Additional keyword arguments.
+        """
+        self.return_spatial = return_spatial
+        super().__init__(weights_path, **build_kwargs)
+
+    def _build(self, model_version: str = "radio_v2.5-h", **build_kwargs):
+        """
+        Build the RADIO model by downloading it via torch.hub.
+
+        Args:
+            model_version (str): Specifies which RADIO model version to load. Default is "radio_v2.5-h".
+            **build_kwargs: Additional kwargs (unused).
 
         Returns:
-            A tuple of (model, eval_transform, precision)
+            A tuple: (model, eval_transform, precision)
         """
         self.enc_name = "radio"
 
-        # RADIO does not currently support local weight loading.
+        # RADIO does not support local weight loading.
         if self.weights_path:
             raise NotImplementedError(
                 "RADIO model doesn't support loading local weights. "
                 "Please rely on the auto-download functionality via the internet."
             )
         else:
-            # Ensure an internet connection is available
             self.ensure_has_internet(self.enc_name)
             try:
                 import torch
 
-                # Download and load the RADIO model via torch.hub.
-                # The repository 'NVlabs/RADIO' is used along with the proper model hook.
                 model = torch.hub.load(
-                    "NVlabs/RADIO",  # NVlabs RADIO repository
-                    "radio_model",  # Function/model name defined in that repo
+                    "NVlabs/RADIO",  # Repository from NVlabs
+                    "radio_model",  # The callable/model hook in that repo
                     version=model_version,  # Specify the model version (e.g., "radio_v2.5-h")
                     progress=True,
-                    skip_validation=True,  # Option to skip additional validations
+                    skip_validation=True,  # Skips additional validations
                 )
             except Exception:
+                import traceback
+
                 traceback.print_exc()
                 raise Exception(
                     "Failed to download the RADIO model. "
                     "Check your internet connection and access permissions."
                 )
 
-        # Define a minimal evaluation transform.
-        # RADIO expects input images with values in the [0, 1] range.
-        # This transform converts a PIL image (or similar input) to a tensor.
+        # Define a basic evaluation transform: Converts an image to a tensor.
         import torchvision.transforms as T
 
         eval_transform = T.Compose(
@@ -1112,20 +1124,25 @@ class RadioInferenceEncoder(BasePatchEncoder):
             ]
         )
 
-        # RADIO by default operates in float32.
+        # RADIO models operate in float32 by default.
         precision = torch.float32
 
         return model, eval_transform, precision
 
     def forward(self, x):
         """
-        Forward pass for RADIO. The underlying RADIO model is expected to return a tuple:
-        (summary, spatial_features).
+        Forward pass for RADIO.
 
         Args:
-            x (torch.Tensor): Input tensor with image values in [0, 1].
+            x (torch.Tensor): Input tensor with image values in the [0, 1] range.
 
         Returns:
-            tuple: (summary, spatial_features) from the RADIO model.
+            If `self.return_spatial` is False (default), returns only the image embedding (summary) as a tensor.
+            If `self.return_spatial` is True, returns the full output tuple (summary, spatial_features) from RADIO.
         """
-        return self.model(x)
+        output = self.model(x)
+        if self.return_spatial:
+            return output
+        else:
+            # Return only the summary representation as the unified image embedding.
+            return output[0]
