@@ -99,6 +99,8 @@ def encoder_factory(model_name: str, **kwargs):
         enc = KaikoL14InferenceEncoder
     elif model_name == 'lunit-vits8':
         enc = LunitS8InferenceEncoder
+    elif model_name == 'radio':
+        enc = RadioInferenceEncoder
     else:
         raise ValueError(f"Unknown encoder name {model_name}")
 
@@ -1054,3 +1056,76 @@ class Conchv15InferenceEncoder(BasePatchEncoder):
 
         precision = torch.float16
         return model, eval_transform, precision
+
+
+class RadioInferenceEncoder(BasePatchEncoder):
+    def _build(self, model_version="radio_v2.5-h", **build_kwargs):
+        """
+        Build the RADIO encoder.
+
+        Args:
+            model_version (str): Specifies which RADIO model version to load.
+                                 Example: "radio_v2.5-h" for the ViT-H/16 version.
+            **build_kwargs: Additional parameters (not used here) for compatibility.
+
+        Returns:
+            A tuple of (model, eval_transform, precision)
+        """
+        self.enc_name = "radio"
+
+        # RADIO does not currently support local weight loading.
+        if self.weights_path:
+            raise NotImplementedError(
+                "RADIO model doesn't support loading local weights. "
+                "Please rely on the auto-download functionality via the internet."
+            )
+        else:
+            # Ensure an internet connection is available
+            self.ensure_has_internet(self.enc_name)
+            try:
+                import torch
+
+                # Download and load the RADIO model via torch.hub.
+                # The repository 'NVlabs/RADIO' is used along with the proper model hook.
+                model = torch.hub.load(
+                    "NVlabs/RADIO",  # NVlabs RADIO repository
+                    "radio_model",  # Function/model name defined in that repo
+                    version=model_version,  # Specify the model version (e.g., "radio_v2.5-h")
+                    progress=True,
+                    skip_validation=True,  # Option to skip additional validations
+                )
+            except Exception:
+                traceback.print_exc()
+                raise Exception(
+                    "Failed to download the RADIO model. "
+                    "Check your internet connection and access permissions."
+                )
+
+        # Define a minimal evaluation transform.
+        # RADIO expects input images with values in the [0, 1] range.
+        # This transform converts a PIL image (or similar input) to a tensor.
+        import torchvision.transforms as T
+
+        eval_transform = T.Compose(
+            [
+                T.ToTensor(),
+            ]
+        )
+
+        # RADIO by default operates in float32.
+        precision = torch.float32
+
+        return model, eval_transform, precision
+
+    def forward(self, x):
+        """
+        Forward pass for RADIO. The underlying RADIO model is expected to return a tuple:
+        (summary, spatial_features).
+
+        Args:
+            x (torch.Tensor): Input tensor with image values in [0, 1].
+
+        Returns:
+            tuple: (summary, spatial_features) from the RADIO model.
+        """
+        return self.model(x)
