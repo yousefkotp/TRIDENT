@@ -69,6 +69,8 @@ def encoder_factory(model_name: str, **kwargs):
         enc = CTransPathInferenceEncoder
     elif model_name == 'phikon':
         enc = PhikonInferenceEncoder
+    elif model_name == 'biomed_clip':
+        enc = BiomedCLIPInferenceEncoder
     elif model_name == 'resnet50':
         enc = ResNet50InferenceEncoder
     elif model_name == 'gigapath':
@@ -1054,3 +1056,91 @@ class Conchv15InferenceEncoder(BasePatchEncoder):
 
         precision = torch.float16
         return model, eval_transform, precision
+
+
+class BiomedCLIPInferenceEncoder(BasePatchEncoder):
+    def _build(self, **build_kwargs):
+        """
+        Build the BiomedCLIP encoder.
+
+        This method loads the BiomedCLIP model either:
+          - Remotely, using the open_clip function `create_model_from_pretrained`
+            with the HF repository identifier 'hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224'.
+          - Or, locally if a checkpoint path is provided. In that case, it expects
+            an accompanying "open_clip_config.json" to be present alongside the checkpoint.
+
+        Args:
+            **build_kwargs: Additional keyword arguments (unused currently).
+
+        Returns:
+            Tuple[torch.nn.Module, Callable, torch.dtype]:
+                - model: The loaded BiomedCLIP model.
+                - eval_transform: The preprocessing transforms for evaluation.
+                - precision: The inference precision (defaults to torch.float32).
+        """
+        self.enc_name = "biomed_clip"
+        weights_path = self._get_weights_path()
+
+        try:
+            from open_clip import (
+                create_model_from_pretrained,
+                get_tokenizer,
+                create_model_and_transforms,
+            )
+        except ImportError:
+            traceback.print_exc()
+            raise Exception("Please install the open_clip package: pip install open_clip")
+
+        if weights_path:
+            # ----- Local Loading -----
+            # Expect a config file "open_clip_config.json" in the same directory as the checkpoint.
+            import os, json
+
+            config_path = os.path.join(os.path.dirname(weights_path), "open_clip_config.json")
+            if not os.path.isfile(config_path):
+                raise FileNotFoundError(
+                    f"Expected config file at '{config_path}', but it was not found."
+                )
+            with open(config_path, "r") as f:
+                config = json.load(f)
+
+            # We assign a unique local model name (this is only for registration purposes).
+            model_name = "biomedclip_local"
+
+            # Load the model and transforms using the local checkpoint.
+            # The preprocess configuration (preprocess_cfg) is read from the config file.
+            model, transforms, _ = create_model_and_transforms(
+                model_name=model_name,
+                pretrained=weights_path,
+                **{f"image_{k}": v for k, v in config.get("preprocess_cfg", {}).items()},
+            )
+        else:
+            # ----- Online Loading -----
+            # Download the model and transforms from HF.
+            model, transforms = create_model_from_pretrained(
+                "hf-hub:microsoft/BiomedCLIP-PubMedBERT_256-vit_base_patch16_224"
+            )
+
+        # Use the provided transforms (which include normalization and resizing) as the evaluation transform.
+        eval_transform = transforms
+        precision = torch.float32
+
+        return model, eval_transform, precision
+
+    def forward(self, x):
+        """
+        Forward pass for BiomedCLIP.
+
+        This method calls the underlying model's image encoder so that only image features are returned.
+        It uses the `encode_image` method if available; otherwise, it falls back to a full forward pass.
+
+        Args:
+            x (torch.Tensor): Input tensor (with pixel values expected to be in [0, 1]).
+
+        Returns:
+            torch.Tensor: The image features.
+        """
+        if hasattr(self.model, "encode_image"):
+            return self.model.encode_image(x)
+        else:
+            return self.model(x)
