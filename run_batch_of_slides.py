@@ -71,7 +71,7 @@ def parse_arguments():
                                  'resnet50', 'gigapath', 'virchow', 'virchow2', 
                                  'hoptimus0', 'hoptimus1', 'phikon_v2', 'conch_v15', 'musk', 'hibou_l',
                                  'kaiko-vits8', 'kaiko-vits16', 'kaiko-vitb8', 'kaiko-vitb16',
-                                 'kaiko-vitl14', 'lunit-vits8'],
+                                 'kaiko-vitl14', 'lunit-vits8', 'radio'],
                         help='Patch encoder to use')
     parser.add_argument(
         '--patch_encoder_ckpt_path', type=str, default=None,
