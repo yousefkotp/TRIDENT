@@ -468,7 +468,8 @@ class Processor:
         device: str, 
         saveas: str = 'h5', 
         batch_limit: int = 512, 
-        saveto: str | None = None
+        saveto: str | None = None,
+        concat_every: int = 5,
     ) -> str:
         """
         The `run_feature_extraction_job` function computes features from the patches generated during the 
@@ -560,7 +561,8 @@ class Processor:
                     save_features=os.path.join(self.job_dir, saveto),
                     device=device,
                     saveas=saveas,
-                    batch_limit=batch_limit
+                    batch_limit=batch_limit,
+                    concat_every=concat_every,
                 )
 
                 remove_lock(wsi_feats_fp)
@@ -656,6 +658,7 @@ class Processor:
                 device=device,
                 saveas='h5',  # must use h5 to run slide extraction later to get coords.
                 batch_limit=batch_limit,
+                concat_every=concat_every
             )
 
         sig = signature(self.run_slide_feature_extraction_job)

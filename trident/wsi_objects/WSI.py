@@ -616,7 +616,8 @@ class WSI:
         save_features: str,
         device: str = 'cuda:0',
         saveas: str = 'h5',
-        batch_limit: int = 512
+        batch_limit: int = 512,
+        concat_every: int = 10,
     ) -> str:
         """
         The `extract_patch_features` function of the class `WSI` extracts feature embeddings 
@@ -682,14 +683,18 @@ class WSI:
         # dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=0, pin_memory=True)
 
         features = []
-        for imgs, _ in dataloader:
+        tensor_features = []
+        for i, (imgs, _) in enumerate(dataloader):
             imgs = imgs.to(device)
             with torch.autocast(device_type='cuda', dtype=precision, enabled=(precision != torch.float32)):
-                batch_features = patch_encoder(imgs)  
-            features.append(batch_features.cpu().numpy())
+                batch_features = patch_encoder(imgs)
+            tensor_features.append(batch_features)
+            if i % concat_every == 0:
+                features.append(torch.cat(tensor_features, dim=0).cpu())
+                tensor_features = []
 
         # Concatenate features
-        features = np.concatenate(features, axis=0)
+        features = torch.cat(features, dim=0).numpy()
 
         # Save the features to disk
         os.makedirs(save_features, exist_ok=True)
