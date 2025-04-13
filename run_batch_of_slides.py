@@ -93,6 +93,7 @@ def parse_arguments():
     parser.add_argument('--batch_size', type=int, default=32, 
                         help='Batch size for feature extraction. Defaults to 32.')
     parser.add_argument('--concat_every', type=int, default=3, help='move to cpu every n batches. defaults to 3')
+    parser.add_argument('--add_existing', action='store_true', default=False, help='add features to existing h5 file')
     return parser.parse_args()
 
 def initialize_processor(args):
@@ -166,6 +167,7 @@ def run_task(processor, args):
                 saveas='h5',
                 batch_limit=args.batch_size,
                 concat_every=args.concat_every,
+                add_existing=args.add_existing
             )
         else:
             # Minimal example for feature extraction:

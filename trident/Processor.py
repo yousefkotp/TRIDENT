@@ -470,6 +470,7 @@ class Processor:
         batch_limit: int = 512, 
         saveto: str | None = None,
         concat_every: int = 5,
+        add_existing: bool = False,
     ) -> str:
         """
         The `run_feature_extraction_job` function computes features from the patches generated during the 
@@ -563,6 +564,7 @@ class Processor:
                     saveas=saveas,
                     batch_limit=batch_limit,
                     concat_every=concat_every,
+                    add_existing=add_existing,
                 )
 
                 remove_lock(wsi_feats_fp)

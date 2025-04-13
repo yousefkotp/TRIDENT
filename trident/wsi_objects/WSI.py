@@ -618,6 +618,7 @@ class WSI:
         saveas: str = 'h5',
         batch_limit: int = 512,
         concat_every: int = 10,
+        add_existing: bool = False,
     ) -> str:
         """
         The `extract_patch_features` function of the class `WSI` extracts feature embeddings 
@@ -692,7 +693,9 @@ class WSI:
             if i % concat_every == 0:
                 features.append(torch.cat(tensor_features, dim=0).cpu())
                 tensor_features = []
-
+        if len(tensor_features) > 0:
+            features.append(torch.cat(tensor_features, dim=0).cpu())
+            tensor_features = []
         # Concatenate features
         features = torch.cat(features, dim=0).numpy()
 
