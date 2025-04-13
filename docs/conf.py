@@ -25,7 +25,7 @@ author = 'Guillaume Jaume'
 release = 'v0.1.0'
 
 # HTML style
-html_theme = 'sphinx_book_theme'
+html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 html_logo = '_static/trident_crop.jpg'
 html_theme_options = {
