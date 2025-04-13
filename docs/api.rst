@@ -1,4 +1,4 @@
-TRIDENT API Reference
+API
 ======================
 
 .. autosummary::

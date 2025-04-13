@@ -24,6 +24,13 @@ author = 'Guillaume Jaume'
 # The full version, including alpha/beta/rc tags
 release = 'v0.1.0'
 
+# HTML style
+html_theme = 'sphinx_book_theme'
+html_static_path = ['_static']
+html_logo = '_static/trident_crop.jpg'
+html_theme_options = {
+    "sidebar_hide_name": True,
+}
 
 # -- General configuration ---------------------------------------------------
 
