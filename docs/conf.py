@@ -22,7 +22,7 @@ copyright = '2025, Guillaume Jaume'
 author = 'Guillaume Jaume'
 
 # The full version, including alpha/beta/rc tags
-release = 'v0.1.0'
+release = 'v0.1.1'
 
 # HTML style
 html_theme = 'sphinx_rtd_theme'
