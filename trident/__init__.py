@@ -16,14 +16,14 @@ from trident.Converter import AnyToTiffConverter
 from trident.Maintenance import deprecated
 
 __all__ = [
+    "Processor",
+    "load_wsi",
     "OpenSlideWSI", 
     "ImageWSI",
     "CuCIMWSI",
-    "load_wsi",
     "OpenSlideWSIPatcher",
     "WSIPatcherDataset",
     "visualize_heatmap",
-    "Processor",
     "AnyToTiffConverter",
     "deprecated",
     "WSIReaderType",

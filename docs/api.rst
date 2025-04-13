@@ -1,12 +1,50 @@
-API
-======================
+API Reference
+=============
 
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
+This section documents the **public API** of TRIDENT. 
 
-   trident
-   trident.patch_encoder_models
-   trident.segmentation_models
-   trident.slide_encoder_models
-   trident.wsi_objects
+.. contents::
+   :local:
+   :depth: 2
+
+
+Trident
+-------
+
+Core of TRIDENT with `Processor` and WSI building.
+
+.. automodule:: trident
+   :members:
+   :undoc-members:
+   :inherited-members:
+   :show-inheritance:
+
+
+Segmentation Models
+-------------------
+
+Semantic segmentation models for tissue vs. background detection and filtering.
+
+.. automodule:: trident.segmentation_models
+   :members:
+   :undoc-members:
+
+
+Patch Encoders
+--------------
+
+Factory for loading patch-level encoder models.
+
+.. automodule:: trident.patch_encoder_models
+   :members:
+   :undoc-members:
+
+
+Slide Encoders
+--------------
+
+Factory for slide-level encoder models.
+
+.. automodule:: trident.slide_encoder_models
+   :members:
+   :undoc-members:
