@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "trident"
-version = "0.1.0"
+version = "0.1.1"
 description = "A package for preprocessing whole-slide images."
 authors = [
     "Andrew Zhang <andrewzh@mit.edu>",

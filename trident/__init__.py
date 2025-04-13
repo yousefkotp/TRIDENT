@@ -1,4 +1,4 @@
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from trident.wsi_objects.OpenSlideWSI import OpenSlideWSI
 from trident.wsi_objects.CuCIMWSI import CuCIMWSI
@@ -16,14 +16,14 @@ from trident.Converter import AnyToTiffConverter
 from trident.Maintenance import deprecated
 
 __all__ = [
+    "Processor",
+    "load_wsi",
     "OpenSlideWSI", 
     "ImageWSI",
     "CuCIMWSI",
-    "load_wsi",
     "OpenSlideWSIPatcher",
     "WSIPatcherDataset",
     "visualize_heatmap",
-    "Processor",
     "AnyToTiffConverter",
     "deprecated",
     "WSIReaderType",
