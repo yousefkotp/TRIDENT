@@ -682,10 +682,27 @@ class WSI:
         dataset = WSIPatcherDataset(patcher, patch_transforms)
         dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=get_num_workers(batch_limit, max_workers=self.max_workers), pin_memory=True)
         # dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=0, pin_memory=True)
-
+        # Load existing features if add_existing is True
         features = []
         tensor_features = []
+        if add_existing:
+            try:
+                with h5py.File(os.path.join(save_features, f'{self.name}.{saveas}'), 'r') as f:
+                    existing_features = f['features'][:]
+                    num_existing = len(existing_features[0])
+                    features  = [torch.tensor(existing_features)]
+            except Exception as e:
+                raise RuntimeError(f"Failed to load existing features: {str(e)}")
+            assert batch_limit % num_existing == 0, ("Batch size must be divisible "
+                                                               "by the number of existing features to ensure no "
+                                                               "features are missed.")
+        counter = 0
         for i, (imgs, _) in enumerate(dataloader):
+            if add_existing:
+                if counter < num_existing:
+                    counter += len(imgs)
+                    continue
+
             imgs = imgs.to(device)
             with torch.autocast(device_type='cuda', dtype=precision, enabled=(precision != torch.float32)):
                 batch_features = patch_encoder(imgs)
@@ -693,10 +710,10 @@ class WSI:
             if i % concat_every == 0:
                 features.append(torch.cat(tensor_features, dim=0).cpu())
                 tensor_features = []
-        if len(tensor_features) > 0:
+        if len(tensor_features) > 0:  # add remaining
             features.append(torch.cat(tensor_features, dim=0).cpu())
             tensor_features = []
-        # Concatenate features
+
         features = torch.cat(features, dim=0).numpy()
 
         # Save the features to disk
