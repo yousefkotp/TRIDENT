@@ -690,7 +690,7 @@ class WSI:
             try:
                 with h5py.File(os.path.join(save_features, f'{self.name}.{saveas}'), 'r') as f:
                     existing_features = f['features'][:]
-                    num_existing = len(existing_features[0])
+                    num_existing = len(existing_features)
                     features  = [torch.tensor(existing_features)]
             except Exception as e:
                 raise RuntimeError(f"Failed to load existing features: {str(e)}")
