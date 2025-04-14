@@ -525,7 +525,7 @@ class Processor:
         for wsi in self.loop:    
             wsi_feats_fp = os.path.join(self.job_dir, saveto, f'{wsi.name}.{saveas}')
             # Check if features already exist
-            if os.path.exists(wsi_feats_fp) and not is_locked(wsi_feats_fp):
+            if os.path.exists(wsi_feats_fp) and not is_locked(wsi_feats_fp) and not add_existing:
                 self.loop.set_postfix_str(f'Features already extracted for {wsi}. Skipping...')
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Features extracted.')
                 self.cleanup(f'{wsi.name}{wsi.ext}')
