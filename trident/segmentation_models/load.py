@@ -364,10 +364,10 @@ def segmentation_model_factory(
         )
 
     if model_name == 'hest':
-        return HESTSegmenter(freeze, confidence_thresh=confidence_thresh, **build_kwargs)
+        return HESTSegmenter(freeze=freeze, confidence_thresh=confidence_thresh, **build_kwargs)
     elif model_name == 'grandqc':
-        return GrandQCSegmenter(freeze, confidence_thresh=confidence_thresh, **build_kwargs)
+        return GrandQCSegmenter(freeze=freeze, confidence_thresh=confidence_thresh, **build_kwargs)
     elif model_name == 'grandqc_artifact':
-        return GrandQCArtifactSegmenter(freeze, **build_kwargs)
+        return GrandQCArtifactSegmenter(freeze=freeze, **build_kwargs)
     else:
         raise ValueError(f"Model type {model_name} not supported")
