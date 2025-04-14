@@ -42,7 +42,11 @@ class TestPatchEncoders(unittest.TestCase):
         self._test_encoder_forward('conch_v1', with_proj = False, normalize = True)
         self._test_encoder_forward('conch_v1', with_proj = True, normalize = False)
         self._test_encoder_forward('conch_v1', with_proj = False, normalize = False)
-        
+
+    def test_radio_forward(self):
+        self._test_encoder_forward("radio")
+
+
     def test_conch_v15_forward(self):
         self._test_encoder_forward('conch_v15')
 

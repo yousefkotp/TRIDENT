@@ -71,7 +71,7 @@ def parse_arguments():
                                  'resnet50', 'gigapath', 'virchow', 'virchow2', 
                                  'hoptimus0', 'hoptimus1', 'phikon_v2', 'conch_v15', 'musk', 'hibou_l',
                                  'kaiko-vits8', 'kaiko-vits16', 'kaiko-vitb8', 'kaiko-vitb16',
-                                 'kaiko-vitl14', 'lunit-vits8'],
+                                 'kaiko-vitl14', 'lunit-vits8', 'radio'],
                         help='Patch encoder to use')
     parser.add_argument(
         '--patch_encoder_ckpt_path', type=str, default=None,
@@ -92,6 +92,7 @@ def parse_arguments():
                         help='Slide encoder to use')
     parser.add_argument('--batch_size', type=int, default=32, 
                         help='Batch size for feature extraction. Defaults to 32.')
+    parser.add_argument('--concat_every', type=int, default=3, help='move to cpu every n batches. defaults to 3')
     return parser.parse_args()
 
 def initialize_processor(args):
@@ -164,6 +165,7 @@ def run_task(processor, args):
                 device=f'cuda:{args.gpu}',
                 saveas='h5',
                 batch_limit=args.batch_size,
+                concat_every=args.concat_every,
             )
         else:
             # Minimal example for feature extraction:
