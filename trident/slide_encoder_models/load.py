@@ -4,13 +4,15 @@ import torch
 import traceback
 from abc import abstractmethod
 from einops import rearrange
+from typing import Optional, Tuple
+
 from trident.IO import get_weights_path
 
 """
 This file contains an assortment of pretrained slide encoders, all loadable via the encoder_factory() function.
 """
 
-def encoder_factory(model_name, pretrained=True, freeze=True, **kwargs):
+def encoder_factory(model_name: str, pretrained: bool = True, freeze: bool = True, **kwargs) -> torch.nn.Module:
         '''
         Build a slide encoder model.
 
@@ -45,8 +47,9 @@ def encoder_factory(model_name, pretrained=True, freeze=True, **kwargs):
         else:
             raise ValueError(f"Model type {model_name} not supported")
         
-        return enc(pretrained = pretrained, freeze = freeze, **kwargs)
-    
+        return enc(pretrained=pretrained, freeze=freeze, **kwargs)
+
+
 # Map from slide encoder to required patch encoder
 # Used in Processor.py to load the correct patch encoder for a given slide encoder
 slide_to_patch_encoder_name = {
@@ -63,7 +66,7 @@ slide_to_patch_encoder_name = {
 
 class BaseSlideEncoder(torch.nn.Module):
     
-    def __init__(self, freeze=True, **build_kwargs):
+    def __init__(self, freeze: bool = True, **build_kwargs: dict) -> None:
         """
         Parent class for all pretrained slide encoders.
         """
@@ -92,6 +95,41 @@ class BaseSlideEncoder(torch.nn.Module):
         pass
 
 
+class CustomSlideEncoder(BaseSlideEncoder):
+    def __init__(
+        self, 
+        enc_name: str, 
+        model: torch.nn.Module, 
+        precision: torch.dtype = torch.float32, 
+        embedding_dim: Optional[int] = None
+    ):
+        """
+        CustomSlideEncoder initialization.
+
+        This class is used when the model and precision are pre-instantiated externally 
+        and should be injected directly into the encoder wrapper.
+
+        Args:
+            enc_name (str): 
+                A unique name or identifier for the encoder.
+            model (torch.nn.Module): 
+                A PyTorch model instance to use for slide-level inference.
+            precision (torch.dtype, optional): 
+                The precision to use for inference (e.g., torch.float32, torch.float16).
+            embedding_dim (int, optional): 
+                The output embedding dimension. If not provided, will attempt to use 
+                `model.embedding_dim` if it exists.
+        """
+        super().__init__(freeze=False)  # Freezing should be handled externally
+        self.enc_name = enc_name
+        self.model = model
+        self.precision = precision
+        self.embedding_dim = embedding_dim or getattr(model, 'embedding_dim', None)
+
+    def _build(self, **build_kwargs):
+        return None, None, None
+
+
 class ABMILSlideEncoder(BaseSlideEncoder):
 
     def __init__(self, **build_kwargs):
@@ -100,9 +138,20 @@ class ABMILSlideEncoder(BaseSlideEncoder):
         """
         super().__init__(**build_kwargs)
     
-    def _build(self, input_feature_dim, n_heads, head_dim, dropout, gated, pretrained=False):
+    def _build(
+        self,
+        input_feature_dim: int,
+        n_heads: int,
+        head_dim: int,
+        dropout: float,
+        gated: bool,
+        pretrained: bool = False
+    ) -> Tuple[torch.nn.ModuleDict, torch.dtype, int]:
+        
         from trident.slide_encoder_models.model_zoo.reusable_blocks.ABMIL import ABMIL
         import torch.nn as nn
+
+        self.enc_name = 'abmil'
         
         assert pretrained is False, "ABMILSlideEncoder has no corresponding pretrained models. Please load with pretrained=False."
                                 
