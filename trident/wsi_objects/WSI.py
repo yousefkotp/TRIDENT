@@ -6,6 +6,7 @@ import warnings
 import torch 
 from typing import List, Tuple, Optional, Literal
 from torch.utils.data import DataLoader
+import h5py
 
 from trident.wsi_objects.WSIPatcher import *
 from trident.wsi_objects.WSIPatcherDataset import WSIPatcherDataset
