@@ -694,9 +694,9 @@ class WSI:
                     features  = [torch.tensor(existing_features)]
             except Exception as e:
                 raise RuntimeError(f"Failed to load existing features: {str(e)}")
-            assert batch_limit % num_existing == 0, ("Batch size must be divisible "
-                                                               "by the number of existing features to ensure no "
-                                                               "features are missed.")
+            assert batch_limit % num_existing == 0, (f"Batch size must be divisible "
+                                                       "by the number of existing features to ensure no "
+                                                       "features are missed. Got {batch_limit} and {num_existing}.")
         counter = 0
         for i, (imgs, _) in enumerate(dataloader):
             if add_existing:
