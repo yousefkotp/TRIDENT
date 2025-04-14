@@ -53,7 +53,9 @@ def parse_arguments():
     parser.add_argument('--remove_holes', action='store_true', default=False, 
                         help='Do you want to remove holes?')
     parser.add_argument('--remove_artifacts', action='store_true', default=False, 
-                        help='Do you want to run an additional model to remove artifacts?')
+                        help='Do you want to run an additional model to remove artifacts (including penmarks, blurs, stains, etc.)?')
+    parser.add_argument('--remove_penmarks', action='store_true', default=False, 
+                        help='Do you want to run an additional model to remove penmarks?')
     # Patching arguments
     parser.add_argument('--mag', type=int, choices=[5, 10, 20, 40, 80], default=20, 
                         help='Magnification for coords/features extraction')
@@ -127,9 +129,10 @@ def run_task(processor, args):
             args.segmenter,
             confidence_thresh=args.seg_conf_thresh,
         )
-        if args.remove_artifacts:
+        if args.remove_artifacts or args.remove_penmarks:
             artifact_remover_model = segmentation_model_factory(
                 'grandqc_artifact',
+                remove_penmarks_only=args.remove_penmarks and not args.remove_artifacts
             )
         else:
             artifact_remover_model = None

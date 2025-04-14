@@ -5,7 +5,6 @@ import traceback
 from abc import abstractmethod
 from einops import rearrange
 from trident.IO import get_weights_path
-import warnings
 
 """
 This file contains an assortment of pretrained slide encoders, all loadable via the encoder_factory() function.
@@ -60,14 +59,14 @@ slide_to_patch_encoder_name = {
     'madeleine': 'conch_v1',
 }
 
-####################################################################################################
+
 
 class BaseSlideEncoder(torch.nn.Module):
     
     def __init__(self, freeze=True, **build_kwargs):
-        '''
+        """
         Parent class for all pretrained slide encoders.
-        '''
+        """
         super().__init__()
         self.enc_name = None
         self.model, self.precision, self.embedding_dim = self._build(**build_kwargs)
@@ -79,24 +78,27 @@ class BaseSlideEncoder(torch.nn.Module):
             self.model.eval()
         
     def forward(self, batch):
-        '''
+        """
         Can be overwritten if model requires special forward pass.
-        '''
+        """
         z = self.model(batch)
         return z
         
     @abstractmethod
     def _build(self, **build_kwargs):
-        '''
+        """
         Initialization method, must be defined in child class.
-        '''
+        """
         pass
 
 
-####################################################################################################
-
-
 class ABMILSlideEncoder(BaseSlideEncoder):
+
+    def __init__(self, **build_kwargs):
+        """
+        ABMIL initialization.
+        """
+        super().__init__(**build_kwargs)
     
     def _build(self, input_feature_dim, n_heads, head_dim, dropout, gated, pretrained=False):
         from trident.slide_encoder_models.model_zoo.reusable_blocks.ABMIL import ABMIL
@@ -147,6 +149,12 @@ class ABMILSlideEncoder(BaseSlideEncoder):
 
 class PRISMSlideEncoder(BaseSlideEncoder):
 
+    def __init__(self, **build_kwargs):
+        """
+        PRISM initialization.
+        """
+        super().__init__(**build_kwargs)
+    
     def _build(self, pretrained=True):
         
         self.enc_name = 'prism'
@@ -183,6 +191,12 @@ class PRISMSlideEncoder(BaseSlideEncoder):
     
 
 class CHIEFSlideEncoder(BaseSlideEncoder):
+
+    def __init__(self, **build_kwargs):
+        """
+        CHIEF initialization.
+        """
+        super().__init__(**build_kwargs)
 
     def _build(self, pretrained=True):
         
@@ -257,6 +271,12 @@ class CHIEFSlideEncoder(BaseSlideEncoder):
 
 class GigaPathSlideEncoder(BaseSlideEncoder):
 
+    def __init__(self, **build_kwargs):
+        """
+        GigaPath initialization.
+        """
+        super().__init__(**build_kwargs)
+
     def _build(self, pretrained=True):
 
         self.enc_name = 'gigapath'
@@ -292,6 +312,12 @@ class GigaPathSlideEncoder(BaseSlideEncoder):
 
 class MadeleineSlideEncoder(BaseSlideEncoder):
 
+    def __init__(self, **build_kwargs):
+        """
+        Madeleine initialization.
+        """
+        super().__init__(**build_kwargs)
+
     def _build(self, pretrained=True):
 
         assert pretrained, "MadeleineSlideEncoder has no non-pretrained models. Please load with pretrained=True."
@@ -317,6 +343,12 @@ class MadeleineSlideEncoder(BaseSlideEncoder):
 
 class ThreadsSlideEncoder(BaseSlideEncoder):
 
+    def __init__(self, **build_kwargs):
+        """
+        Threads initialization.
+        """
+        super().__init__(**build_kwargs)
+
     def _build(self, pretrained=True):
 
         self.enc_name = 'threads'
@@ -335,6 +367,12 @@ class ThreadsSlideEncoder(BaseSlideEncoder):
 
 class TitanSlideEncoder(BaseSlideEncoder):
     
+    def __init__(self, **build_kwargs):
+        """
+        Titan initialization.
+        """
+        super().__init__(**build_kwargs)
+
     def _build(self, pretrained=True):
         self.enc_name = 'titan'
         assert pretrained, "TitanSlideEncoder has no non-pretrained models. Please load with pretrained=True."
@@ -350,6 +388,12 @@ class TitanSlideEncoder(BaseSlideEncoder):
 
 
 class MeanSlideEncoder(BaseSlideEncoder):
+
+    def __init__(self, **build_kwargs):
+        """
+        Mean pooling initialization.
+        """
+        super().__init__(**build_kwargs)
 
     def _build(self, model_name = 'mean-default'):
         self.enc_name = model_name

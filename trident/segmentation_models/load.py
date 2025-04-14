@@ -13,6 +13,23 @@ class SegmentationModel(torch.nn.Module):
     _has_internet = has_internet_connection()
 
     def __init__(self, freeze=True, confidence_thresh=0.5, **build_kwargs):
+        """
+        Initialize Segmentation model wrapper.
+
+        Args:
+            freeze (bool, optional): If True, the model's parameters are frozen 
+                (i.e., not trainable) and the model is set to evaluation mode. 
+                Defaults to True.
+            confidence_thresh (float, optional): Threshold for prediction confidence. 
+                Predictions below this threshold may be filtered out or ignored. 
+                Default is 0.5. Set to 0.4 to keep more tissue.
+            **build_kwargs: Additional keyword arguments passed to the internal 
+                `_build` method.
+
+        Attributes:
+            model (torch.nn.Module): The constructed model.
+            eval_transforms (Callable): Transformations to apply to input data during inference.
+        """
         super().__init__()
         self.model, self.eval_transforms = self._build(**build_kwargs)
         self.confidence_thresh = confidence_thresh
@@ -32,11 +49,19 @@ class SegmentationModel(torch.nn.Module):
         
     @abstractmethod
     def _build(self, **build_kwargs) -> tuple[nn.Module, transforms.Compose]:
-        """Build the segmentation model and preprocessing transforms."""
+        """
+        Build the segmentation model and preprocessing transforms.
+        """
         pass
 
 
 class HESTSegmenter(SegmentationModel):
+
+    def __init__(self, **build_kwargs):
+        """
+        HESTSegmenter initialization.
+        """
+        super().__init__(**build_kwargs)
 
     def _build(self):
         """
@@ -144,6 +169,12 @@ class GrandQCArtifactSegmenter(SegmentationModel):
         7: "Background"
     }
 
+    def __init__(self, **build_kwargs):
+        """
+        GrandQCArtifactSegmenter initialization.
+        """
+        super().__init__(**build_kwargs)
+
     def _build(self, remove_penmarks_only=False):
         """
         Load the GrandQC artifact removal segmentation model.
@@ -228,7 +259,13 @@ class GrandQCArtifactSegmenter(SegmentationModel):
 
 
 class GrandQCSegmenter(SegmentationModel):
-        
+    
+    def __init__(self, **build_kwargs):
+        """
+        GrandQCSegmenter initialization.
+        """
+        super().__init__(**build_kwargs)
+
     def _build(self):
         """
         Load the GrandQC tissue detection segmentation model.
