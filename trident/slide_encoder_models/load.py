@@ -13,7 +13,7 @@ This file contains an assortment of pretrained slide encoders, all loadable via 
 """
 
 def encoder_factory(model_name: str, pretrained: bool = True, freeze: bool = True, **kwargs) -> torch.nn.Module:
-        '''
+        """
         Build a slide encoder model.
 
         Args:
@@ -24,13 +24,12 @@ def encoder_factory(model_name: str, pretrained: bool = True, freeze: bool = Tru
 
         Returns:
             torch.nn.Module: The slide encoder model.
-        '''
+        """
 
         if model_name.startswith('mean-'):
             enc = MeanSlideEncoder
             return enc(model_name = model_name)
         elif 'threads' in model_name:
-            # raise ValueError(f"threads is not public. Coming soon!")
             enc = ThreadsSlideEncoder
         elif 'titan' in model_name:
             enc = TitanSlideEncoder

@@ -332,9 +332,9 @@ class GrandQCSegmenter(SegmentationModel):
         return model, eval_transforms
 
     def forward(self, image: torch.Tensor) -> torch.Tensor:
-        '''
+        """
         Custom forward pass.
-        '''
+        """
         logits = self.model.predict(image)
         probs = torch.softmax(logits, dim=1)  
         max_probs, predicted_classes = torch.max(probs, dim=1)  
