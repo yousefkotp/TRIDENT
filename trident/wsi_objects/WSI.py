@@ -694,6 +694,9 @@ class WSI:
                 tensor_features = []
 
         # Concatenate features
+        if len(tensor_features) > 0:
+            features.append(torch.cat(tensor_features, dim=0).cpu())
+            tensor_features = []
         features = torch.cat(features, dim=0).numpy()
 
         # Save the features to disk
