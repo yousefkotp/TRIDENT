@@ -101,6 +101,9 @@ class TestPatchEncoders(unittest.TestCase):
         
     def test_lunitvits8_forward(self):
         self._test_encoder_forward('lunit-vits8')
+
+    def test_vit_huge_patch14_224_in21k_forward(self):
+        self._test_encoder_forward('vit_huge_patch14_224_in21k')
     
     
 

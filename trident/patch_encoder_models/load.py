@@ -99,6 +99,8 @@ def encoder_factory(model_name: str, **kwargs):
         enc = KaikoS16InferenceEncoder
     elif model_name == 'kaiko-vitl14':
         enc = KaikoL14InferenceEncoder
+    elif model_name == 'vit_huge_patch14_224_in21k':
+        enc = VitHugeInferenceEncoder
     elif model_name == 'lunit-vits8':
         enc = LunitS8InferenceEncoder
     elif model_name == 'radio':
@@ -1285,3 +1287,53 @@ class RadioInferenceEncoder(BasePatchEncoder):
             return output
         else:
             return output[0]
+
+
+class VitHugeInferenceEncoder(BasePatchEncoder):
+    """
+    Inference encoder for timm's ViT-Huge pretrained on ImageNet-21k:
+      https://huggingface.co/timm/vit_huge_patch14_224_in21k
+    """
+
+    def _build(self):
+        import timm
+        from torchvision.transforms import InterpolationMode
+
+        self.enc_name = "vit_huge_patch14_224_in21k"
+        weights_path = self._get_weights_path()
+
+        # Build model (remove classification head via num_classes=0)
+        try:
+            if weights_path:
+                model = timm.create_model(
+                    "vit_huge_patch14_224_in21k",
+                    pretrained=False,
+                    num_classes=0,
+                    checkpoint_path=weights_path,
+                )
+            else:
+                self.ensure_has_internet(self.enc_name)
+                model = timm.create_model(
+                    "vit_huge_patch14_224_in21k", pretrained=True, num_classes=0
+                )
+        except Exception:
+            traceback.print_exc()
+            raise Exception(
+                f"Failed to create ViT-Huge model "
+                f"{'(from local checkpoint)' if weights_path else '(download)'}."
+            )
+
+        # Preprocessing: use ImageNet-21k normalization (0.5/0.5/0.5) per model card
+        mean, std = (0.5, 0.5, 0.5), (0.5, 0.5, 0.5)
+        eval_transform = get_eval_transforms(
+            mean,
+            std,
+            target_img_size=224,
+            center_crop=True,
+            interpolation=InterpolationMode.BICUBIC,
+            max_size=None,
+            antialias=True,
+        )
+        precision = torch.float32
+
+        return model, eval_transform, precision
