@@ -1195,6 +1195,13 @@ class Conchv15InferenceEncoder(BasePatchEncoder):
 
 
 class Midnight12kInferenceEncoder(BasePatchEncoder):
+
+    def __init__(self, **build_kwargs):
+        """
+        Midnight 12-k initialization by Kaiko.
+        """
+        super().__init__(**build_kwargs)
+
     def _build(self, return_type: Literal["cls_token", "cls+mean"] = "cls_token"):
         from transformers import AutoModel
         from .utils.constants import KAIKO_MEAN, KAIKO_STD
