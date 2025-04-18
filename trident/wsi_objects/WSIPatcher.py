@@ -276,6 +276,8 @@ class WSIPatcher:
         # Get thumbnail in right format
         canvas = np.array(self.wsi.get_thumbnail((thumbnail_width, thumbnail_height))).astype(np.uint8)
 
+        tmp_coords = self.coords_only
+        self.coords_only = True
         # Draw rectangles for patches
         for (x, y) in self:
             x, y = int(x/downsample_factor), int(y/downsample_factor)
@@ -287,6 +289,8 @@ class WSIPatcher:
                 (255, 0, 0), 
                 thickness
             )
+
+        self.coords_only = tmp_coords
 
         # Add annotations
         text_area_height = 130
