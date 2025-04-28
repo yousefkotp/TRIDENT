@@ -10,10 +10,9 @@ python run_batch_of_slides.py --task all --wsi_dir output/wsis --job_dir output 
 import argparse
 import torch
 from trident import Processor
-from trident import WSIReaderType
 
 
-def parse_arguments():
+def build_parser():
     """
     Parse command-line arguments for the Trident processing script.
     """
@@ -94,7 +93,23 @@ def parse_arguments():
                         help='Slide encoder to use')
     parser.add_argument('--batch_size', type=int, default=32, 
                         help='Batch size for feature extraction. Defaults to 32.')
-    return parser.parse_args()
+    return parser
+
+
+def parse_arguments():
+    return build_parser().parse_args()
+
+
+def generate_help_text() -> str:
+    """
+    Generate the command-line help text for documentation purposes.
+    
+    Returns:
+        str: The full help message string from the argument parser.
+    """
+    parser = build_parser()
+    return parser.format_help()
+
 
 def initialize_processor(args):
     """
@@ -112,6 +127,7 @@ def initialize_processor(args):
         max_workers=args.max_workers,
         reader_type=args.reader_type
     )
+
 
 def run_task(processor, args):
     """
@@ -183,6 +199,7 @@ def run_task(processor, args):
     else:
         raise ValueError(f'Invalid task: {args.task}')
 
+
 def main():
     args = parse_arguments()
     processor = initialize_processor(args)
@@ -199,6 +216,7 @@ def main():
         run_task(processor, args)
     else:
         run_task(processor, args)
+
 
 if __name__ == "__main__":
     main()
