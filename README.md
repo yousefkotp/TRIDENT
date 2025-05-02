@@ -95,24 +95,26 @@ python run_single_slide.py --slide_path ./wsis/xxxx.svs --job_dir ./trident_proc
 
 Trident supports 21 patch encoders, loaded via a patch [`encoder_factory`](https://github.com/mahmoodlab/trident/blob/main/trident/patch_encoder_models/load.py#L14). Models requiring specific installations will return error messages with additional instructions. Gated models on HuggingFace require access requests.
 
-- **UNI**: [MahmoodLab/UNI](https://huggingface.co/MahmoodLab/UNI)  (`--patch_encoder uni_v1 --patch_size 256 --mag 20`)
-- **UNIv2**: [MahmoodLab/UNI2-h](https://huggingface.co/MahmoodLab/UNI2-h)  (`--patch_encoder uni_v2 --patch_size 256 --mag 20`)
-- **CONCH**: [MahmoodLab/CONCH](https://huggingface.co/MahmoodLab/CONCH)  (`--patch_encoder conch_v1 --patch_size 512 --mag 20`)
-- **CONCHv1.5**: [MahmoodLab/conchv1_5](https://huggingface.co/MahmoodLab/conchv1_5)  (`--patch_encoder conch_v15 --patch_size 512 --mag 20`)
-- **Virchow**: [paige-ai/Virchow](https://huggingface.co/paige-ai/Virchow)  (`--patch_encoder virchow --patch_size 224 --mag 20`)
-- **Virchow2**: [paige-ai/Virchow2](https://huggingface.co/paige-ai/Virchow2)  (`--patch_encoder virchow2 --patch_size 224 --mag 20`)
-- **Phikon**: [owkin/phikon](https://huggingface.co/owkin/phikon)  (`--patch_encoder phikon --patch_size 224 --mag 20`)
-- **Phikon-v2**: [owkin/phikon-v2](https://huggingface.co/owkin/phikon-v2/)  (`--patch_encoder phikon_v2 --patch_size 224 --mag 20`)
-- **Prov-Gigapath**: [prov-gigapath](https://huggingface.co/prov-gigapath/prov-gigapath)  (`--patch_encoder gigapath --patch_size 256 --mag 20`)
-- **H-Optimus-0**: [bioptimus/H-optimus-0](https://huggingface.co/bioptimus/H-optimus-0)  (`--patch_encoder hoptimus0 --patch_size 224 --mag 20`)
-- **H-Optimus-1**: [bioptimus/H-optimus-1](https://huggingface.co/bioptimus/H-optimus-1)  (`--patch_encoder hoptimus1 --patch_size 224 --mag 20`)
-- **MUSK**: [xiangjx/musk](https://huggingface.co/xiangjx/musk)  (`--patch_encoder musk --patch_size 384 --mag 20`)
-- **Midnight-12k**: [kaiko-ai/midnight](https://huggingface.co/kaiko-ai/midnight)  (`--patch_encoder midnight12k --patch_size 224 --mag 20`)
-- **Kaiko**: Hosted on TorchHub  (`--patch_encoder {kaiko-vits8, kaiko-vits16, kaiko-vitb8, kaiko-vitb16, kaiko-vitl14} --patch_size 256 --mag 20`)
-- **Lunit**: [1aurent/vit_small_patch8_224.lunit_dino](https://huggingface.co/1aurent/vit_small_patch8_224.lunit_dino)  (`--patch_encoder lunit-vits8 --patch_size 224 --mag 20`)
-- **Hibou**: [histai/hibou-L](https://huggingface.co/histai/hibou-L)  (`--patch_encoder hibou_l --patch_size 224 --mag 20`)
-- **CTransPath-CHIEF**: Automatic download  (`--patch_encoder ctranspath --patch_size 256 --mag 10`)
-- **ResNet50**: Hosted on torchvision.  (`--patch_encoder resnet50 --patch_size 256 --mag 20`)
+| Patch Encoder         | Embedding Dim | Args                                                             | Link |
+|-----------------------|---------------:|------------------------------------------------------------------|------|
+| **UNI**               | 1024           | `--patch_encoder uni_v1 --patch_size 256 --mag 20`               | [MahmoodLab/UNI](https://huggingface.co/MahmoodLab/UNI) |
+| **UNI2-h**             | 1536           | `--patch_encoder uni_v2 --patch_size 256 --mag 20`               | [MahmoodLab/UNI2-h](https://huggingface.co/MahmoodLab/UNI2-h) |
+| **CONCH**             | 512            | `--patch_encoder conch_v1 --patch_size 512 --mag 20`             | [MahmoodLab/CONCH](https://huggingface.co/MahmoodLab/CONCH) |
+| **CONCHv1.5**         | 768            | `--patch_encoder conch_v15 --patch_size 512 --mag 20`            | [MahmoodLab/conchv1_5](https://huggingface.co/MahmoodLab/conchv1_5) |
+| **Virchow**           | 2560           | `--patch_encoder virchow --patch_size 224 --mag 20`              | [paige-ai/Virchow](https://huggingface.co/paige-ai/Virchow) |
+| **Virchow2**          | 2560           | `--patch_encoder virchow2 --patch_size 224 --mag 20`             | [paige-ai/Virchow2](https://huggingface.co/paige-ai/Virchow2) |
+| **Phikon**            | 768            | `--patch_encoder phikon --patch_size 224 --mag 20`               | [owkin/phikon](https://huggingface.co/owkin/phikon) |
+| **Phikon-v2**         | 1024           | `--patch_encoder phikon_v2 --patch_size 224 --mag 20`            | [owkin/phikon-v2](https://huggingface.co/owkin/phikon-v2/) |
+| **Prov-Gigapath**     | 1536           | `--patch_encoder gigapath --patch_size 256 --mag 20`             | [prov-gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) |
+| **H-Optimus-0**       | 1536           | `--patch_encoder hoptimus0 --patch_size 224 --mag 20`            | [bioptimus/H-optimus-0](https://huggingface.co/bioptimus/H-optimus-0) |
+| **H-Optimus-1**       | 1536           | `--patch_encoder hoptimus1 --patch_size 224 --mag 20`            | [bioptimus/H-optimus-1](https://huggingface.co/bioptimus/H-optimus-1) |
+| **MUSK**              | 1024           | `--patch_encoder musk --patch_size 384 --mag 20`                 | [xiangjx/musk](https://huggingface.co/xiangjx/musk) |
+| **Midnight-12k**      | 3072           | `--patch_encoder midnight12k --patch_size 224 --mag 20`          | [kaiko-ai/midnight](https://huggingface.co/kaiko-ai/midnight) |
+| **Kaiko**             | 384/768/1024   | `--patch_encoder {kaiko-vits8, kaiko-vits16, kaiko-vitb8, kaiko-vitb16, kaiko-vitl14} --patch_size 256 --mag 20` | [1aurent/kaikoai-models-66636c99d8e1e34bc6dcf795](https://huggingface.co/collections/1aurent/kaikoai-models-66636c99d8e1e34bc6dcf795) |
+| **Lunit**             | 384            | `--patch_encoder lunit-vits8 --patch_size 224 --mag 20`          | [1aurent/vit_small_patch8_224.lunit_dino](https://huggingface.co/1aurent/vit_small_patch8_224.lunit_dino) |
+| **Hibou**             | 1024           | `--patch_encoder hibou_l --patch_size 224 --mag 20`              | [histai/hibou-L](https://huggingface.co/histai/hibou-L) |
+| **CTransPath-CHIEF**  | 768            | `--patch_encoder ctranspath --patch_size 256 --mag 10`           | — |
+| **ResNet50**          | 1024           | `--patch_encoder resnet50 --patch_size 256 --mag 20`             | — |
 
 **Step 3b: Slide Feature Extraction:** Extracts slide embeddings using a slide encoder. Will also automatically extract the right patch embeddings. 
  - **Command**:
@@ -129,12 +131,15 @@ Trident supports 21 patch encoders, loaded via a patch [`encoder_factory`](https
    - Features are saved as h5 files in `./trident_processed/20x_256px/slide_features_titan`. (Shape: `(feature_dim)`)
 
 Trident supports 5 slide encoders, loaded via a slide-level [`encoder_factory`](https://github.com/mahmoodlab/trident/blob/main/trident/slide_encoder_models/load.py#L14). Models requiring specific installations will return error messages with additional instructions. Gated models on HuggingFace require access requests.
-- **Threads**: Coming Soon! [MahmoodLab/threads](https://huggingface.co/MahmoodLab/threads) (`--slide_encoder threads`). Based on `conch_v15` with `512x512` @20x.
-- **Titan**: [MahmoodLab/TITAN](https://huggingface.co/MahmoodLab/TITAN) (`--slide_encoder titan`). Based on `conch_v15` with `512x512` @20x.
-- **PRISM**: [paige-ai/Prism](https://huggingface.co/paige-ai/Prism) (`--slide_encoder prism`). Based on `virchow` with `224x224` @20x.
-- **CHIEF**: [CHIEF](https://github.com/hms-dbmi/CHIEF) (`--slide_encoder chief`). Based on `ctranspath` with `256x256` @10x.
-- **GigaPath**: [prov-gigapath](https://huggingface.co/prov-gigapath/prov-gigapath)  (`--slide_encoder gigapath`). Based on `gigapath` with `256x256x` @20x.
-- **Madeleine**: [MahmoodLab/madeleine](https://huggingface.co/MahmoodLab/madeleine) (`--slide_encoder madeleine`). Based on `conch_v1` with `256x256` @10x.
+
+| Slide Encoder | Patch Encoder | Args | Link |
+|---------------|----------------|------|------|
+| **Threads** | conch_v15 | `--slide_encoder threads --patch_size 512 --mag 20` | *(Coming Soon!)* |
+| **Titan** | conch_v15 | `--slide_encoder titan --patch_size 512 --mag 20` | [MahmoodLab/TITAN](https://huggingface.co/MahmoodLab/TITAN) |
+| **PRISM** | virchow | `--slide_encoder prism --patch_size 224 --mag 20` | [paige-ai/Prism](https://huggingface.co/paige-ai/Prism) |
+| **CHIEF** | ctranspath | `--slide_encoder chief --patch_size 256 --mag 10` | [CHIEF](https://github.com/hms-dbmi/CHIEF) |
+| **GigaPath** | gigapath | `--slide_encoder gigapath --patch_size 256 --mag 20` | [prov-gigapath](https://huggingface.co/prov-gigapath/prov-gigapath) |
+| **Madeleine** | conch_v1 | `--slide_encoder madeleine --patch_size 256 --mag 10` | [MahmoodLab/madeleine](https://huggingface.co/MahmoodLab/madeleine) |
 
 > [!NOTE]
 > If your task includes multiple slides per patient, you can generate patient-level embeddings by: (1) processing each slide independently and taking their average slide embedding (late fusion) or (2) pooling all patches together and processing that as a single "pseudo-slide" (early fusion). For an implementation of both fusion strategies, please check out our sister repository [Patho-Bench](https://github.com/mahmoodlab/Patho-Bench).
