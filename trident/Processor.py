@@ -124,25 +124,31 @@ class Processor:
 
         # Collect slide paths
         valid_slides = []
-        if search_nested:
-            for root, _, files in os.walk(wsi_source):
-                for f in files:
-                    if any(f.endswith(ext) for ext in self.wsi_ext):
-                        rel_path = os.path.relpath(os.path.join(root, f), wsi_source)
-                        valid_slides.append(rel_path)
-        else:
-            valid_slides = [f for f in os.listdir(wsi_source) if any(f.endswith(ext) for ext in self.wsi_ext)]
-
         if custom_list_of_wsis is not None:
             import pandas as pd
             wsi_df = pd.read_csv(custom_list_of_wsis)
             if 'wsi' not in wsi_df.columns:
                 raise ValueError("CSV with custom list of WSIs must contain a column named 'wsi'.")
+            if len(wsi_df['wsi'].dropna()) == 0:
+                raise ValueError("No valid slides found in the custom list.")
             valid_slides = wsi_df['wsi'].dropna().astype(str).tolist()
+            for slide in valid_slides:
+                if not os.path.exists(os.path.join(wsi_source, slide)):
+                    raise ValueError(f"Slide {slide} not found in {wsi_source}. If the folder is nested, you should set wsi column using the relative path to the wsi_source.")
+            self.wsi_rel_paths = valid_slides
             valid_mpps = wsi_df['mpp'].dropna().tolist() if 'mpp' in wsi_df.columns else None
         else:
+            if search_nested:
+                for root, _, files in os.walk(wsi_source):
+                    for f in files:
+                        if any(f.endswith(ext) for ext in self.wsi_ext):
+                            rel_path = os.path.relpath(os.path.join(root, f), wsi_source)
+                            valid_slides.append(rel_path)
+            else:
+                valid_slides = [f for f in os.listdir(wsi_source) if any(f.endswith(ext) for ext in self.wsi_ext)]
             valid_slides = sorted(valid_slides)
             valid_mpps = None
+            self.wsi_rel_paths = None
 
         print(f'Found {len(valid_slides)} valid slides in {wsi_source}.')
 
@@ -153,12 +159,15 @@ class Processor:
         # WSI initialization
         self.wsis = []
         for wsi_idx, wsi in enumerate(valid_slides):
-            wsi_path = os.path.join(self.wsi_cache or self.wsi_source, wsi)
+            if self.wsi_cache:
+                wsi_path = os.path.join(self.wsi_cache, os.path.basename(wsi))
+            else:
+                wsi_path = os.path.join(self.wsi_source, wsi)
 
             tissue_seg_path = os.path.join(self.job_dir, 'contours_geojson', f'{os.path.splitext(os.path.basename(wsi))[0]}.geojson')
             if not os.path.exists(tissue_seg_path):
                 tissue_seg_path = None
-
+            
             slide = load_wsi(
                 slide_path=wsi_path,
                 name=os.path.basename(wsi),
@@ -188,8 +197,8 @@ class Processor:
 
         >>> processor.populate_cache()
         """
-        self.loop = tqdm(self.wsis, desc='Populating cache', total = len(self.wsis))
-        for wsi in self.loop:
+        self.loop = tqdm(enumerate(self.wsis), desc='Populating cache', total = len(self.wsis))
+        for i, wsi in self.loop:
             # Check if WSI is already in cache
             if os.path.exists(os.path.join(self.wsi_cache, f'{wsi.name}{wsi.ext}')) and not is_locked(os.path.join(self.wsi_cache, f'{wsi.name}{wsi.ext}')):
                 self.loop.set_postfix_str(f'{wsi.name}{wsi.ext} already in cache. Skipping...')
@@ -205,7 +214,18 @@ class Processor:
                 self.loop.set_postfix_str(f'Moving {wsi.name}{wsi.ext} to cache...')
                 create_lock(os.path.join(self.wsi_cache, f'{wsi.name}{wsi.ext}'))
                 update_log(os.path.join(self.wsi_cache, '_logs.txt'), f'{wsi.name}{wsi.ext}', 'LOCKED. Moving to cache...')
-                shutil.copy(os.path.join(self.wsi_source, f'{wsi.name}{wsi.ext}'), self.wsi_cache)
+                if self.wsi_rel_paths:
+                    shutil.copy(os.path.join(self.wsi_source, self.wsi_rel_paths[i]), self.wsi_cache)
+                    if wsi.ext in ['.mrxs']: # maybe also add dicom
+                        mrxs_dir = os.path.join(self.wsi_source, os.path.splitext(self.wsi_rel_paths[i])[0])
+                        if os.path.exists(mrxs_dir):
+                            shutil.copytree(mrxs_dir, os.path.join(self.wsi_cache, wsi.name))
+                else:
+                    shutil.copy(os.path.join(self.wsi_source, f'{wsi.name}{wsi.ext}'), self.wsi_cache)
+                    if wsi.ext in ['.mrxs']:
+                        mrxs_dir = os.path.join(self.wsi_source, wsi.name)
+                        if os.path.exists(mrxs_dir):
+                            shutil.copytree(mrxs_dir, os.path.join(self.wsi_cache, wsi.name))
                 remove_lock(os.path.join(self.wsi_cache, f'{wsi.name}{wsi.ext}'))
                 update_log(os.path.join(self.wsi_cache, '_logs.txt'), f'{wsi.name}{wsi.ext}', 'Moved to cache.')           
 
@@ -767,6 +787,9 @@ class Processor:
         if self.wsi_cache is not None and self.clear_cache and os.path.exists(os.path.join(self.wsi_cache, filename)):
             self.loop.set_postfix_str(f'Deleting {filename} from cache...')
             os.remove(os.path.join(self.wsi_cache, filename))
+            if filename.endswith('.mrxs'):
+                if os.path.exists(os.path.join(self.wsi_cache, os.path.splitext(filename)[0])):
+                    shutil.rmtree(os.path.join(self.wsi_cache, os.path.splitext(filename)[0]), ignore_errors=True)
 
     def save_config(
         self,
