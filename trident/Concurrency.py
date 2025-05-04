@@ -1,5 +1,7 @@
 import os
+import gc
 import copy
+import torch
 import shutil
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
@@ -88,4 +90,6 @@ def batch_consumer(queue, args):
             shutil.rmtree(ssd_batch_dir)
         
         del processor
+        gc.collect()
+        torch.cuda.empty_cache()
         queue.task_done()
