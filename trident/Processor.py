@@ -716,3 +716,27 @@ class Processor:
         # Save the combined configuration to the specified file
         with open(saveto, 'w') as f:
             json.dump(config, f, indent=4, cls=JSONsaver)
+
+    def release(self) -> None:
+        """
+        Release all resources tied to the WSIs held by this Processor instance.
+        Frees memory, closes file handles, and clears GPU memory.
+        Should be called after processing is complete to avoid memory leaks.
+        """
+        if hasattr(self, "wsis"):
+            for wsi in self.wsis:
+                try:
+                    wsi.release()
+                except Exception:
+                    pass
+            self.wsis.clear()
+
+        # Also clear loop references (e.g., tqdm)
+        if hasattr(self, "loop"):
+            self.loop = None
+
+        # Explicit garbage collection and CUDA cache release
+        import gc
+        import torch
+        gc.collect()
+        torch.cuda.empty_cache()

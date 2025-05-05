@@ -76,6 +76,7 @@ def batch_consumer(
         processor_factory (Callable): Function that creates a processor given a WSI dir.
         run_task_fn (Callable): Function to run a task given a processor and task name.
     """
+
     while True:
         batch_id = queue.get()
         if batch_id is None:
@@ -87,16 +88,20 @@ def batch_consumer(
 
         processor = processor_factory(ssd_batch_dir)
 
-        if task == 'all':
-            for subtask in ['seg', 'coords', 'feat']:
-                run_task_fn(processor, subtask)
-        else:
-            run_task_fn(processor, task)
+        try:
+            if task == 'all':
+                for subtask in ['seg', 'coords', 'feat']:
+                    run_task_fn(processor, subtask)
+            else:
+                run_task_fn(processor, task)
+        finally:
+            # release all WSI and processor resources
+            if hasattr(processor, "release"):
+                processor.release()
+            del processor
+            gc.collect()
+            torch.cuda.empty_cache()
 
-        print(f"[CONSUMER] Clearing cache for batch {batch_id}")
-        shutil.rmtree(ssd_batch_dir, ignore_errors=True)
-
-        del processor
-        gc.collect()
-        torch.cuda.empty_cache()
-        queue.task_done()
+            print(f"[CONSUMER] Clearing cache for batch {batch_id}")
+            shutil.rmtree(ssd_batch_dir, ignore_errors=True)
+            queue.task_done()
