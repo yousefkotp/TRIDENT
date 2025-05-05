@@ -14,6 +14,25 @@ from trident.Converter import OPENSLIDE_EXTENSIONS, PIL_EXTENSIONS
 from trident import WSIReaderType
 
 
+def initialize_processor(args):
+    """
+    Initialize the Trident Processor arguments set in `run_batch_of_slides`.
+    """
+    return Processor(
+        job_dir=args.job_dir,
+        wsi_source=args.wsi_dir,
+        wsi_ext=args.wsi_ext,
+        wsi_cache=args.wsi_cache,
+        clear_cache=args.clear_cache,
+        skip_errors=args.skip_errors,
+        custom_mpp_keys=args.custom_mpp_keys,
+        custom_list_of_wsis=args.custom_list_of_wsis,
+        max_workers=args.max_workers,
+        reader_type=args.reader_type,
+        search_nested=args.search_nested,
+    )
+
+
 class Processor:
 
     def __init__(

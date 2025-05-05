@@ -3,9 +3,8 @@ import gc
 import copy
 import torch
 import shutil
-import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
-from trident import Processor, initialize_processor, run_task
+from trident import initialize_processor, run_task
 
 
 def cache_batch(wsis, batch_id, dest_dir):
@@ -16,6 +15,7 @@ def cache_batch(wsis, batch_id, dest_dir):
             mrxs_dir = os.path.splitext(wsi)[0]
             if os.path.exists(mrxs_dir):
                 shutil.copytree(mrxs_dir, os.path.join(dest_dir, os.path.basename(mrxs_dir)))
+
 
 def get_all_valid_slides(args):
     if args.custom_list_of_wsis is not None:
@@ -50,6 +50,7 @@ def get_all_valid_slides(args):
 
     valid_slides = [os.path.join(args.wsi_dir, slide) for slide in valid_slides]
     return valid_slides
+
 
 def batch_producer(queue, valid_slides, start_idx, args):
     for i in range(start_idx, len(valid_slides), args.cache_batch_size):

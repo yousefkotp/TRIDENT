@@ -9,7 +9,7 @@ from trident.wsi_objects.WSIPatcherDataset import WSIPatcherDataset
 
 from trident.Visualization import visualize_heatmap
 
-from trident.Processor import Processor
+from trident.Processor import Processor, initialize_processor
 
 from trident.Converter import AnyToTiffConverter
 
@@ -17,6 +17,7 @@ from trident.Maintenance import deprecated
 
 __all__ = [
     "Processor",
+    "initialize_processor",
     "load_wsi",
     "OpenSlideWSI", 
     "ImageWSI",
@@ -30,31 +31,12 @@ __all__ = [
     "WSIReaderType",
 ]
 
-def initialize_processor(args):
-    """
-    Initialize the Trident Processor with the given arguments.
-    """
-    return Processor(
-        job_dir=args.job_dir,
-        wsi_source=args.wsi_dir,
-        wsi_ext=args.wsi_ext,
-        wsi_cache=args.wsi_cache,
-        clear_cache=args.clear_cache,
-        skip_errors=args.skip_errors,
-        custom_mpp_keys=args.custom_mpp_keys,
-        custom_list_of_wsis=args.custom_list_of_wsis,
-        max_workers=args.max_workers,
-        reader_type=args.reader_type,
-        search_nested=args.search_nested,
-    )
 
 def run_task(processor, args):
     """
     Execute the specified task using the Trident Processor.
     """
-    if args.task == 'cache':
-        processor.populate_cache()
-    elif args.task == 'seg':
+    if args.task == 'seg':
         # Minimal example for tissue segmentation:
         # python run_batch_of_slides.py --task seg --wsi_dir wsis --job_dir trident_processed --gpu 0
         from trident.segmentation_models.load import segmentation_model_factory

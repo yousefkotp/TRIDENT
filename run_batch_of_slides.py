@@ -9,7 +9,7 @@ python run_batch_of_slides.py --task all --wsi_dir output/wsis --job_dir output 
 import os
 import argparse
 import torch
-from trident import Processor, WSIReaderType, initialize_processor, run_task
+from trident import initialize_processor, run_task
 
 
 def build_parser():
@@ -17,27 +17,32 @@ def build_parser():
     Parse command-line arguments for the Trident processing script.
     """
     parser = argparse.ArgumentParser(description='Run Trident')
+
     # Generic arguments 
-    parser.add_argument('--gpu', type=int, default=0, help='GPU index to use for processing tasks')
+    parser.add_argument('--gpu', type=int, default=0, help='GPU index to use for processing tasks.')
     parser.add_argument('--task', type=str, default='seg', 
-                        choices=['cache', 'seg', 'coords', 'feat', 'all'], 
-                        help='Task to run: cache, seg (segmentation), coords (save tissue coordinates), img (save tissue images), feat (extract features)')
-    parser.add_argument('--job_dir', type=str, required=True, help='Directory to store outputs')
-    parser.add_argument('--wsi_cache', type=str, default=None, 
-                        help='Directory to copy slides to for local processing')
-    parser.add_argument('--clear_cache', action='store_true', default=False, 
-                        help='Delete slides from cache after processing')
-    parser.add_argument('--cache_batch_size', type=int, default=32,
-                        help='Number of slides to cache at once. This is to avoid filling up the local disk.')
+                        choices=['seg', 'coords', 'feat', 'all'], 
+                        help='Task to run: seg (segmentation), coords (save tissue coordinates), img (save tissue images), feat (extract features).')
+    parser.add_argument('--job_dir', type=str, required=True, help='Directory to store outputs.')
     parser.add_argument('--skip_errors', action='store_true', default=False, 
-                        help='Skip errored slides and continue processing')
+                        help='Skip errored slides and continue processing.')
     parser.add_argument('--max_workers', type=int, default=None, help='Maximum number of workers. Set to 0 to use main process.')
+
+    # Caching argument for fast WSI processing
+    parser.add_argument(
+        '--wsi_cache', type=str, default=None,
+        help='Path to a local cache (e.g., SSD) used to speed up access to WSIs stored on slower drives (e.g., HDD).'
+    )
+    parser.add_argument(
+        '--cache_batch_size', type=int, default=32,
+        help='Maximum number of slides to cache locally at once. Helps control disk usage.'
+    )
 
     # Slide-related arguments
     parser.add_argument('--wsi_dir', type=str, required=True, 
-                        help='Directory containing WSI files (no nesting allowed)')
+                        help='Directory containing WSI files (no nesting allowed).')
     parser.add_argument('--wsi_ext', type=str, nargs='+', default=None, 
-                        help='List of allowed file extensions for WSI files')
+                        help='List of allowed file extensions for WSI files.')
     parser.add_argument('--custom_mpp_keys', type=str, nargs='+', default=None,
                     help='Custom keys used to store the resolution as MPP (micron per pixel) in your list of whole-slide image.')
     parser.add_argument('--custom_list_of_wsis', type=str, default=None,
@@ -63,15 +68,15 @@ def build_parser():
                         help='Do you want to run an additional model to remove penmarks?')
     # Patching arguments
     parser.add_argument('--mag', type=int, choices=[5, 10, 20, 40, 80], default=20, 
-                        help='Magnification for coords/features extraction')
+                        help='Magnification for coords/features extraction.')
     parser.add_argument('--patch_size', type=int, default=512, 
-                        help='Patch size for coords/image extraction')
+                        help='Patch size for coords/image extraction.')
     parser.add_argument('--overlap', type=int, default=0, 
-                        help='Absolute overlap for patching in pixels. Defaults to 0. ')
+                        help='Absolute overlap for patching in pixels. Defaults to 0.')
     parser.add_argument('--min_tissue_proportion', type=float, default=0., 
-                        help='Minimum proportion of the patch under tissue to be kept. Between 0. and 1.0. Defaults to 0. ')
+                        help='Minimum proportion of the patch under tissue to be kept. Between 0. and 1.0. Defaults to 0.')
     parser.add_argument('--coords_dir', type=str, default=None, 
-                        help='Directory to save/restore tissue coordinates')
+                        help='Directory to save/restore tissue coordinates.')
     # Feature extraction arguments 
     parser.add_argument('--patch_encoder', type=str, default='conch_v15', 
                         choices=['conch_v1', 'uni_v1', 'uni_v2', 'ctranspath', 'phikon', 
@@ -124,7 +129,7 @@ def main():
     # ensure cuda is available
     args.device = f'cuda:{args.gpu}' if torch.cuda.is_available() else 'cpu'
 
-    if args.wsi_cache and args.task != 'cache' and args.clear_cache:
+    if args.wsi_cache:
         from queue import Queue
         from threading import Thread
         from trident.Concurrency import batch_producer, batch_consumer, get_all_valid_slides, cache_batch
@@ -149,12 +154,9 @@ def main():
     else:
         processor = initialize_processor(args)
         if args.task == 'all':
-            args.task = 'seg'
-            run_task(processor, args)
-            args.task = 'coords'
-            run_task(processor, args)
-            args.task = 'feat'
-            run_task(processor, args)
+            for task in ['seg', 'coords', 'feat']:
+                args.task = task
+                run_task(processor, args)
         else:
             run_task(processor, args)
 
