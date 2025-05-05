@@ -232,6 +232,7 @@ def main():
             search_nested=args.search_nested,
             max_workers=args.max_workers
         )
+        print(f"[MAIN] Found {len(valid_slides)} valid slides in {args.wsi_dir}.")
 
         warm = valid_slides[:args.cache_batch_size]
         warmup_dir = os.path.join(args.wsi_cache, "batch_0")

@@ -436,7 +436,7 @@ class JSONsaver(json.JSONEncoder):
             else:
                 return f'CALLABLE.{str(obj)}'
         else:
-            print(f"WARNING: Could not serialize object {obj}")
+            print(f"[WARNING] Could not serialize object {obj}")
             return super().default(obj)
         
 
@@ -579,7 +579,7 @@ def mask_to_gdf(
         foreground_contours, hole_contours = filter_contours(contours, hierarchy, filter_params, pixel_size)  # Necessary for filtering out artifacts
 
     if len(foreground_contours) == 0:
-        print(f"Warning: No contour were detected. Contour GeoJSON will be empty.")
+        print(f"[Warning] No contour were detected. Contour GeoJSON will be empty.")
         return gpd.GeoDataFrame(columns=['tissue_id', 'geometry'])
     else:
         contours_tissue = scale_contours(foreground_contours, contour_scale / scale, is_nested=False)
