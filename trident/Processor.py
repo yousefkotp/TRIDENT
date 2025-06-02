@@ -468,7 +468,9 @@ class Processor:
         device: str, 
         saveas: str = 'h5', 
         batch_limit: int = 512, 
-        saveto: str | None = None
+        saveto: str | None = None,
+        use_sam: bool = False,
+        sam_config: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         The `run_feature_extraction_job` function computes features from the patches generated during the 
@@ -489,6 +491,12 @@ class Processor:
             saveto (str, optional): 
                 Directory where the extracted features will be saved. If not provided, a directory name will 
                 be generated automatically. Defaults to None.
+            use_sam (bool, optional):
+                Whether to use SAM (Segment Anything Model) for feature extraction. Defaults to False.
+            sam_config (dict, optional):
+                Configuration for SAM feature extraction. Should include keys like 'model_type', 
+                'checkpoint_path', 'sam_version', 'pred_iou_thresh', 'stability_score_thresh', 
+                and 'min_mask_region_area'. Defaults to None.
 
         Returns:
             str: The absolute path to where the features are saved.
@@ -560,7 +568,9 @@ class Processor:
                     save_features=os.path.join(self.job_dir, saveto),
                     device=device,
                     saveas=saveas,
-                    batch_limit=batch_limit
+                    batch_limit=batch_limit,
+                    use_sam=use_sam,
+                    sam_config=sam_config
                 )
 
                 remove_lock(wsi_feats_fp)

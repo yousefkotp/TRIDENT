@@ -43,6 +43,26 @@ def parse_arguments():
                         help='Absolute overlap for patching in pixels. Defaults to 0. ')
     parser.add_argument('--batch_size', type=int, default=32, 
                         help='Batch size for feature extraction. Defaults to 32.')
+    parser.add_argument('--use_sam', action='store_true', 
+                        help='Use SAM for mask generation. Defaults to False.')
+    
+    # SAM arguments
+    parser.add_argument('--sam_model_type', type=str, default='vit_h',
+                        choices=['vit_h', 'vit_l', 'vit_b'],
+                        help='SAM model architecture type. Defaults to vit_h.')
+    parser.add_argument('--sam_checkpoint_path', type=str, default=None,
+                        help='Path to SAM model checkpoint file. Required if use_sam is True.')
+    parser.add_argument('--sam_version', type=str, default='sam',
+                        choices=['sam', 'sam2'],
+                        help='SAM version to use. Defaults to sam.')
+    parser.add_argument('--sam_pred_iou_thresh', type=float, default=0.3,
+                        help='SAM prediction IoU threshold for mask filtering. Defaults to 0.3.')
+    parser.add_argument('--sam_stability_score_thresh', type=float, default=0.6,
+                        help='SAM stability score threshold for mask filtering. Defaults to 0.6.')
+    parser.add_argument('--sam_min_mask_region_area', type=float, default=0.1,
+                        help='SAM minimum mask area as a fraction of image area. Defaults to 0.1.')
+    parser.add_argument('--sam_debug', type=str, default=None,
+                        help='Directory name to save SAM segmentation visualizations for debugging. If None, no debug visualizations are saved. Defaults to None.')
     return parser.parse_args()
 
 
@@ -93,12 +113,30 @@ def process_slide(args):
     encoder.eval()
     encoder.to(f"cuda:{args.gpu}")
     features_path = features_dir = os.path.join(save_coords, "features_{}".format(args.patch_encoder))
+    
+    # Prepare SAM configuration if use_sam is True
+    sam_config = None
+    if args.use_sam:
+        if args.sam_checkpoint_path is None:
+            raise ValueError("SAM checkpoint path must be provided when use_sam is True")
+        sam_config = {
+            "model_type": args.sam_model_type,
+            "checkpoint_path": args.sam_checkpoint_path,
+            "sam_version": args.sam_version,
+            "pred_iou_thresh": args.sam_pred_iou_thresh,
+            "stability_score_thresh": args.sam_stability_score_thresh,
+            "min_mask_region_area": args.sam_min_mask_region_area,
+            "debug": args.sam_debug
+        }
+    
     slide.extract_patch_features(
         patch_encoder=encoder,
         coords_path=os.path.join(save_coords, 'patches', f'{slide.name}_patches.h5'),
         save_features=features_dir,
         device=f"cuda:{args.gpu}",
-        batch_limit=args.batch_size
+        batch_limit=args.batch_size,
+        use_sam=args.use_sam,
+        sam_config=sam_config
     )
     print(f"Feature extraction completed. Results saved to {features_path}")
 

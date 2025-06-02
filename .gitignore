@@ -1,0 +1,12 @@
+**/__pycache__/**
+**/*.pyc
+**/*.pth
+**/*.h5
+**/*.jpg
+**/*.png
+**/*.jpeg
+trident.egg-info/
+logs/
+*.sh
+extract_embeddings_baseline.sh
+extract_embeddings_sam.sh

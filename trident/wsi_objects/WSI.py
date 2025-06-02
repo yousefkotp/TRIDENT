@@ -4,16 +4,37 @@ from PIL import Image
 import os 
 import warnings
 import torch 
-from typing import List, Tuple, Optional, Literal
+from typing import List, Tuple, Optional, Literal, Dict, Any, Union
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+import random
 
 from trident.wsi_objects.WSIPatcher import *
-from trident.wsi_objects.WSIPatcherDataset import WSIPatcherDataset
+from trident.wsi_objects.WSIPatcherDataset import WSIPatcherDataset, WSIPatchesDataset
 from trident.IO import (
     save_h5, read_coords, read_coords_legacy,
     mask_to_gdf, overlay_gdf_on_thumbnail, get_num_workers
 )
+from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
+from trident.segmentation_models import SamModelLoader
+import cv2
+import random
+import matplotlib.pyplot as plt
+
+def show_anns(anns):
+    if len(anns) == 0:
+        return
+    sorted_anns = sorted(anns, key=(lambda x: x['area']), reverse=True)
+    ax = plt.gca()
+    ax.set_autoscale_on(False)
+
+    img = np.ones((sorted_anns[0]['segmentation'].shape[0], sorted_anns[0]['segmentation'].shape[1], 4))
+    img[:,:,3] = 0
+    for ann in sorted_anns:
+        m = ann['segmentation']
+        color_mask = np.concatenate([np.random.random(3), [0.35]])
+        img[m] = color_mask
+    ax.imshow(img)
 
 ReadMode = Literal['pil', 'numpy']
 
@@ -581,7 +602,9 @@ class WSI:
         save_features: str,
         device: str = 'cuda:0',
         saveas: str = 'h5',
-        batch_limit: int = 512
+        batch_limit: int = 512,
+        use_sam: bool = False,
+        sam_config: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         The `extract_patch_features` function of the class `WSI` extracts feature embeddings 
@@ -602,17 +625,22 @@ class WSI:
             Format to save the features ('h5' or 'pt'). Defaults to 'h5'.
         batch_limit : int, optional
             Maximum batch size for feature extraction. Defaults to 512.
+        use_sam : bool, optional
+            Whether to use SAM for mask generation and feature extraction. Defaults to False.
+        sam_config : Dict[str, Any], optional
+            Configuration for SAM model. Example:
+            {
+                "model_type": "vit_h",
+                "checkpoint_path": "/path/to/checkpoint.pth",
+                "sam_version": "sam",  # or "sam2" for SAM 2.0
+                "min_mask_region_area": 0.01,  # Minimum mask area as a fraction of image area
+                "debug": "sam_visualizations"  # Directory name to save debug visualizations (optional)
+            }
 
         Returns:
         --------
         str:
             The absolute file path to the saved feature file in the specified format.
-
-        Example:
-        --------
-        >>> features_path = wsi.extract_features(patch_encoder, "output_coords/sample_name_patches.h5", "output_features")
-        >>> print(features_path)
-        output_features/sample_name.h5
         """
 
         self._lazy_initialize()
@@ -643,15 +671,88 @@ class WSI:
             pil=True,
         )
         dataset = WSIPatcherDataset(patcher, patch_transforms)
+        if use_sam:
+            dataset.transform = None
         dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=get_num_workers(batch_limit, max_workers=self.max_workers), pin_memory=True)
-        # dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=0, pin_memory=True)
+
+        if use_sam:
+            if sam_config is None:
+                raise ValueError("SAM config must be provided if use_sam is True.")
+
+            # Get debug configuration from sam_config
+            debug_dir = sam_config.get("debug", None)
+            debug = debug_dir is not None
+
+            sam_loader = SamModelLoader(
+                model_type=sam_config.get("model_type"),
+                checkpoint_path=sam_config.get("checkpoint_path"),
+                sam_version=sam_config.get("sam_version"),
+                device=device,
+                pred_iou_thresh=sam_config.get("pred_iou_thresh"),
+                stability_score_thresh=sam_config.get("stability_score_thresh")
+            )
+            sam_loader.load_model()
+            min_mask_area_ratio = sam_config.get("min_mask_region_area")
+
+            patches = []
+            for imgs, _ in dataloader:
+                for img in imgs:
+                    img = img.numpy()
+                    masks = sam_loader.generate_masks(img)
+
+                    if debug:
+                        filtered_masks = []
+
+                    for mask in masks:
+                        if mask['area'] < min_mask_area_ratio * img.shape[0] * img.shape[1]:
+                            continue
+
+                        mask_intensity = np.mean(img[mask['segmentation']])
+                        if mask_intensity > 210 or mask_intensity < 5:
+                            continue
+
+                        if debug:
+                            filtered_masks.append(mask)
+
+                        bbox = mask['bbox']
+                        bbox = [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])]
+                        patch = img[bbox[1]:bbox[1]+bbox[3], bbox[0]:bbox[0]+bbox[2]]
+                        patches.append(patch)
+
+                    if debug:
+                        image_name = f'{random.randint(0, 1000000)}.png'
+                        print(f'Image name: {image_name}')
+                        for mask in filtered_masks:
+                            mask_intensity = np.mean(img[mask['segmentation']])
+                            mask_area = mask['area']
+                            print(f"Mask area: {mask_area}")
+                            print(f"Mask intensity: {mask_intensity}")
+                        print('-' * 100)
+                        plt.figure(figsize=(10, 10))
+                        plt.imshow(img)
+                        show_anns(filtered_masks)
+                        plt.axis('off')
+                        plt.tight_layout()
+                        os.makedirs(debug_dir, exist_ok=True)
+                        plt.savefig(f'{debug_dir}/{image_name}')
+                        plt.close()
+
+            dataset = WSIPatchesDataset(patches, patch_transforms)
+            dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=get_num_workers(batch_limit, max_workers=self.max_workers), pin_memory=True)
 
         features = []
-        for imgs, _ in dataloader:
-            imgs = imgs.to(device)
-            with torch.autocast(device_type='cuda', dtype=precision, enabled=(precision != torch.float32)):
-                batch_features = patch_encoder(imgs)  
-            features.append(batch_features.cpu().numpy())
+        if use_sam:
+            for imgs in dataloader:
+                imgs = imgs.to(device, dtype=precision)
+                with torch.autocast(device_type='cuda', dtype=precision, enabled=(precision != torch.float32)):
+                    batch_features = patch_encoder(imgs)  
+                features.append(batch_features.cpu().numpy())
+        else:
+            for imgs, _ in dataloader:
+                imgs = imgs.to(device, dtype=precision)
+                with torch.autocast(device_type='cuda', dtype=precision, enabled=(precision != torch.float32)):
+                    batch_features = patch_encoder(imgs)  
+                features.append(batch_features.cpu().numpy())
 
         # Concatenate features
         features = np.concatenate(features, axis=0)
@@ -675,7 +776,7 @@ class WSI:
             raise ValueError(f'Invalid save_features_as: {saveas}. Only "h5" and "pt" are supported.')
 
         return os.path.join(save_features, f'{self.name}.{saveas}')
-
+    
     @torch.inference_mode()
     def extract_slide_features(
         self,
