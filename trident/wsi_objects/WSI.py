@@ -698,6 +698,7 @@ class WSI:
             for imgs, _ in dataloader:
                 for img in imgs:
                     img = img.numpy()
+                    patches.append(img)
                     masks = sam_loader.generate_masks(img)
 
                     if debug:
