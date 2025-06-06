@@ -19,7 +19,7 @@ This project was developed by the [Mahmood Lab](https://faisal.ai/) at Harvard M
 - **Slide Feature Extraction**: Extract slide embeddings from 5+ slide foundation models, including [Threads](https://arxiv.org/abs/2501.16652) (coming soon!), [Titan](https://arxiv.org/abs/2411.19666), and [GigaPath](https://www.nature.com/articles/s41586-024-07441-w). 
 
 ### Updates:
-- 05.25: New batch-wise WSI caching for scalable processing on limited SSD space.
+- 05.25: New batch-wise WSI caching for scalable processing on limited SSD space + nested WSI search (`--search_nested`).
 - 04.25: Native support for PIL.Image and CuCIM (use `wsi = load_wsi(xxx.svs)`). Support for seg + patch encoding without Internet.
 - 04.25: Remove artifacts/penmarks from the tissue segmentation with `--remove_artifacts` and `--remove_penmarks`. 
 - 02.25: New image converter from `czi`, `png`, etc to `tiff`.
