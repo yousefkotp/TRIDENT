@@ -139,9 +139,15 @@ def _get_trident_home():
 
 
 def has_internet_connection(timeout=3.0) -> bool:
+    endpoint = os.environ.get("HF_ENDPOINT", "huggingface.co")
+    
+    if endpoint.startswith(("http://", "https://")):
+        from urllib.parse import urlparse
+        endpoint = urlparse(endpoint).netloc
+    
     try:
         # Fast socket-level check
-        socket.create_connection(("huggingface.co", 443), timeout=timeout)
+        socket.create_connection((endpoint, 443), timeout=timeout)
         return True
     except OSError:
         pass
@@ -149,7 +155,8 @@ def has_internet_connection(timeout=3.0) -> bool:
     try:
         # Fallback HTTP-level check (if requests is available)
         import requests
-        r = requests.head("https://huggingface.co", timeout=timeout)
+        url = f"https://{endpoint}" if not endpoint.startswith(("http://", "https://")) else endpoint
+        r = requests.head(url, timeout=timeout)
         return r.status_code < 500
     except Exception:
         return False
