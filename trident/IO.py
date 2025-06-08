@@ -25,7 +25,9 @@ def collect_valid_slides(
     wsi_ext: Optional[List[str]] = None,
     search_nested: bool = False,
     max_workers: int = 8,
-    return_relative_paths: bool = False
+    return_relative_paths: bool = False,
+    skip_existing: bool = False,
+    extraction_kwargs: dict = False
 ) -> Union[List[str], Tuple[List[str], List[str]]]:
     """
     Retrieve all valid WSI file paths from a directory, optionally filtered by a custom list.
@@ -98,6 +100,53 @@ def collect_valid_slides(
 
         valid_rel_paths.sort()
 
+    if skip_existing:
+        from tqdm import tqdm
+        import geopandas as gpd
+        from concurrent.futures import ThreadPoolExecutor
+        def skip_fn(rel_path: str, geojson_dir: str, feat_dir: str) -> bool:
+            slide_id = os.path.splitext(os.path.basename(rel_path))[0]
+            geojson_path = os.path.join(geojson_dir, f'{slide_id}.geojson')
+            # if segmentation doesn't exist, we don't skip
+            if not os.path.exists(geojson_path):
+                return False
+            # if segmentation exists, check if it is empty; if empty, we skip
+            if gpd.read_file(geojson_path, rows=1).empty:
+                return True
+            # if segmentation exists, check if feature exist
+            feat_path = os.path.join(feat_dir, f'{slide_id}.h5')
+            if os.path.exists(feat_path):
+                return True
+            return False
+        
+        job_dir = extraction_kwargs['job_dir']
+        geojson_dir = os.path.join(job_dir, 'contours_geojson')
+        coords_dir = extraction_kwargs['coords_dir'] or f'{extraction_kwargs["mag"]}x_{extraction_kwargs["patch_size"]}px_{extraction_kwargs["overlap"]}px_overlap'
+        coords_dir = os.path.join(job_dir, coords_dir)
+        if extraction_kwargs['slide_encoder']:
+            slide_encoder = extraction_kwargs['slide_encoder']
+            from trident.slide_encoder_models.load import slide_to_patch_encoder_name
+            if slide_encoder.startswith('mean-'):
+                slide_to_patch_encoder_name[slide_encoder] = slide_encoder.split('mean-')[1] # e.g. mean-resnet18 -> resnet18
+            mustbe_patch_encoder = slide_to_patch_encoder_name[slide_encoder]
+            feat_dir = os.path.join(coords_dir, f'slide_features_{slide_encoder}')
+        else:
+            patch_encoder = extraction_kwargs['patch_encoder']
+            feat_dir = os.path.join(coords_dir, f'features_{patch_encoder}')
+        
+        # skip using multiprocessing
+        print(f"Skipping existing in {job_dir}...")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = []
+            for rel_path in tqdm(valid_rel_paths, desc="Skipping existing"):
+                futures.append(
+                    executor.submit(skip_fn, rel_path, geojson_dir, feat_dir)
+                )
+            results = [f.result() for f in futures]
+        print(f"Skipped {sum(results)}/{len(results)} existing slides.")
+        # filter out skipped slides
+        valid_rel_paths = [rel for rel, skip in zip(valid_rel_paths, results) if not skip]
+    
     full_paths = [os.path.join(wsi_dir, rel) for rel in valid_rel_paths]
 
     return (full_paths, valid_rel_paths) if return_relative_paths else full_paths

@@ -218,6 +218,8 @@ def main():
     if args.wsi_cache:
         # === Parallel pipeline with caching ===
 
+        assert args.task in ["feat", "all"], "wsi cache should only be used when feature extraction is needed, otherwise directly reading the slide from remote is enough"
+
         from queue import Queue
         from threading import Thread
 
@@ -230,7 +232,9 @@ def main():
             custom_list_path=args.custom_list_of_wsis,
             wsi_ext=args.wsi_ext,
             search_nested=args.search_nested,
-            max_workers=args.max_workers
+            max_workers=args.max_workers,
+            skip_existing=True,
+            extraction_kwargs=vars(args),
         )
         print(f"[MAIN] Found {len(valid_slides)} valid slides in {args.wsi_dir}.")
 
