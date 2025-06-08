@@ -345,11 +345,11 @@ class WSI:
         # Post-process the mask
         predicted_mask = (predicted_mask > 0).astype(np.uint8) * 255
 
-        # Fill holes if desired
-        if not holes_are_tissue:
-            holes, _ = cv2.findContours(predicted_mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
-            for hole in holes:
-                cv2.drawContours(predicted_mask, [hole], 0, 255, -1)
+        # # Fill holes if desired
+        # if not holes_are_tissue:
+        #     holes, _ = cv2.findContours(predicted_mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_SIMPLE)
+        #     for hole in holes:
+        #         cv2.drawContours(predicted_mask, [hole], 0, 255, -1)
 
         # Save thumbnail image
         thumbnail_saveto = os.path.join(job_dir, 'thumbnails', f'{self.name}.jpg')
