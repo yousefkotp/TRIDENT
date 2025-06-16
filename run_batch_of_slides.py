@@ -102,6 +102,8 @@ def build_parser():
                         help='SAM model architecture type. Defaults to vit_h.')
     parser.add_argument('--sam_checkpoint_path', type=str, default=None,
                         help='Path to SAM model checkpoint file. Required if use_sam is True.')
+    parser.add_argument('--sam_model_cfg', type=str, default=None,
+                        help='Path to SAM model configuration file. Required if use_sam is True and SAM version is sam2.')
     parser.add_argument('--sam_version', type=str, default='sam',
                         choices=['sam', 'sam2'],
                         help='SAM version to use. Defaults to sam.')
@@ -207,6 +209,7 @@ def run_task(processor, args):
                     "model_type": args.sam_model_type,
                     "checkpoint_path": args.sam_checkpoint_path,
                     "sam_version": args.sam_version,
+                    "sam_model_cfg": args.sam_model_cfg,
                     "pred_iou_thresh": args.sam_pred_iou_thresh,
                     "stability_score_thresh": args.sam_stability_score_thresh,
                     "min_mask_region_area": args.sam_min_mask_region_area,

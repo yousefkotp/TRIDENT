@@ -21,21 +21,6 @@ import cv2
 import random
 import matplotlib.pyplot as plt
 
-def show_anns(anns):
-    if len(anns) == 0:
-        return
-    sorted_anns = sorted(anns, key=(lambda x: x['area']), reverse=True)
-    ax = plt.gca()
-    ax.set_autoscale_on(False)
-
-    img = np.ones((sorted_anns[0]['segmentation'].shape[0], sorted_anns[0]['segmentation'].shape[1], 4))
-    img[:,:,3] = 0
-    for ann in sorted_anns:
-        m = ann['segmentation']
-        color_mask = np.concatenate([np.random.random(3), [0.35]])
-        img[m] = color_mask
-    ax.imshow(img)
-
 ReadMode = Literal['pil', 'numpy']
 
 
@@ -686,6 +671,7 @@ class WSI:
             sam_loader = SamModelLoader(
                 model_type=sam_config.get("model_type"),
                 checkpoint_path=sam_config.get("checkpoint_path"),
+                model_cfg=sam_config.get("sam_model_cfg"),
                 sam_version=sam_config.get("sam_version"),
                 device=device,
                 pred_iou_thresh=sam_config.get("pred_iou_thresh"),
@@ -731,7 +717,7 @@ class WSI:
                         print('-' * 100)
                         plt.figure(figsize=(10, 10))
                         plt.imshow(img)
-                        show_anns(filtered_masks)
+                        sam_loader.show_anns(filtered_masks)
                         plt.axis('off')
                         plt.tight_layout()
                         os.makedirs(debug_dir, exist_ok=True)

@@ -1,6 +1,13 @@
 from typing import List, Tuple, Optional, Dict, Any, Literal, Union
 import numpy as np
 import torch
+from sam2.build_sam import build_sam2
+from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+import cv2
+import matplotlib.pyplot as plt
+import os
+import random
+
 
 class SamModelLoader:
     """
@@ -16,6 +23,7 @@ class SamModelLoader:
         device: str = "cuda",
         pred_iou_thresh: float = 0.3,
         stability_score_thresh: float = 0.6,
+        model_cfg: Optional[str] = None,  # (only SAM-v2)
     ):
         """
         Initialize a SAM model loader.
@@ -36,6 +44,7 @@ class SamModelLoader:
         self.stability_score_thresh = stability_score_thresh
         self.model = None
         self.mask_generator = None
+        self.model_cfg = model_cfg
         
     def load_model(self) -> None:
         """
@@ -58,11 +67,38 @@ class SamModelLoader:
                     pred_iou_thresh=self.pred_iou_thresh,
                     stability_score_thresh=self.stability_score_thresh
                 )
+                print("SAM model loaded")
             except ImportError:
                 raise ImportError("segment_anything package not found. Install it with: pip install segment_anything")
                 
         elif self.sam_version == "sam2":
-            raise NotImplementedError("SAM 2.0 is not yet implemented")
+
+            if self.checkpoint_path is None or self.model_cfg is None:
+                raise ValueError(
+                    "`checkpoint_path` **and** `model_cfg` must be provided for SAM 2"
+                )
+
+            self.model = build_sam2(self.model_cfg, self.checkpoint_path)
+            self.model.to(self.device)
+
+            self.mask_generator = SAM2AutomaticMaskGenerator(
+                self.model,
+                points_per_side=32,
+                points_per_batch=256,
+                pred_iou_thresh=0.8,
+                stability_score_thresh=0.95,
+                stability_score_offset=1.0,
+                mask_threshold=0.0,
+                box_nms_thresh=0.7,
+                crop_n_layers=0,
+                crop_nms_thresh=0.7,
+                crop_overlap_ratio=512 / 1500,
+                crop_n_points_downscale_factor= 1,
+                min_mask_region_area=0,
+                use_m2m=False,
+                multimask_output=True,
+            )
+            print("SAM 2.0 model loaded successfully")
         else:
             raise ValueError(f"Unsupported SAM version: {self.sam_version}. Use 'sam' or 'sam2'.")
     
@@ -94,6 +130,21 @@ class SamModelLoader:
         if self.sam_version == "sam":
             return self.mask_generator.generate(image, **kwargs)
         elif self.sam_version == "sam2":
-            raise NotImplementedError("SAM 2.0 is not yet implemented")
+            return self.mask_generator.generate(image, **kwargs)
         else:
             raise ValueError(f"Unsupported SAM version: {self.sam_version}. Use 'sam' or 'sam2'.")
+    
+    def show_anns(self, anns):
+        if len(anns) == 0:
+            return
+        sorted_anns = sorted(anns, key=(lambda x: x['area']), reverse=True)
+        ax = plt.gca()
+        ax.set_autoscale_on(False)
+
+        img = np.ones((sorted_anns[0]['segmentation'].shape[0], sorted_anns[0]['segmentation'].shape[1], 4))
+        img[:,:,3] = 0
+        for ann in sorted_anns:
+            m = ann['segmentation']
+            color_mask = np.concatenate([np.random.random(3), [0.35]])
+            img[m] = color_mask
+        ax.imshow(img)
