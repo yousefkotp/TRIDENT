@@ -61,7 +61,11 @@ class SamModelLoader:
                     raise ValueError("Checkpoint path must be provided for SAM model")
                     
                 self.model = sam_model_registry[self.model_type](checkpoint=self.checkpoint_path)
+                self.model.eval()
                 self.model.to(self.device)
+                self.model = torch.compile(self.model, mode="reduce-overhead")
+                torch.backends.cuda.matmul.allow_tf32 = True
+                
                 self.mask_generator = SamAutomaticMaskGenerator(
                     self.model,
                     pred_iou_thresh=self.pred_iou_thresh,
@@ -79,7 +83,10 @@ class SamModelLoader:
                 )
 
             self.model = build_sam2(self.model_cfg, self.checkpoint_path)
+            self.model.eval()
             self.model.to(self.device)
+            self.model = torch.compile(self.model, mode="reduce-overhead")
+            torch.backends.cuda.matmul.allow_tf32 = True
 
             self.mask_generator = SAM2AutomaticMaskGenerator(
                 self.model,
@@ -101,7 +108,7 @@ class SamModelLoader:
             print("SAM 2.0 model loaded successfully")
         else:
             raise ValueError(f"Unsupported SAM version: {self.sam_version}. Use 'sam' or 'sam2'.")
-    
+
     def generate_masks(self, image: np.ndarray, **kwargs) -> List[Dict[str, Any]]:
         """
         Generate masks for the provided image.
@@ -126,13 +133,13 @@ class SamModelLoader:
         """
         if self.model is None:
             self.load_model()
-        
-        if self.sam_version == "sam":
-            return self.mask_generator.generate(image, **kwargs)
-        elif self.sam_version == "sam2":
-            return self.mask_generator.generate(image, **kwargs)
-        else:
-            raise ValueError(f"Unsupported SAM version: {self.sam_version}. Use 'sam' or 'sam2'.")
+        with torch.inference_mode():
+            if self.sam_version == "sam":
+                return self.mask_generator.generate(image, **kwargs)
+            elif self.sam_version == "sam2":
+                return self.mask_generator.generate(image, **kwargs)
+            else:
+                raise ValueError(f"Unsupported SAM version: {self.sam_version}. Use 'sam' or 'sam2'.")
     
     def show_anns(self, anns):
         if len(anns) == 0:
