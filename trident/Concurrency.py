@@ -19,7 +19,8 @@ def cache_batch(wsis: List[str], dest_dir: str) -> List[str]:
 
     for wsi in wsis:
         dest_path = os.path.join(dest_dir, os.path.basename(wsi))
-        shutil.copy(wsi, dest_path)
+        if not os.path.exists(dest_path):
+            shutil.copy(wsi, dest_path)
         copied.append(dest_path)
 
         if wsi.endswith('.mrxs'):
