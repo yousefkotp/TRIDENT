@@ -448,12 +448,16 @@ class FeatherSlideEncoder(BaseSlideEncoder):
     def _build(self, pretrained=True):
         self.enc_name = 'feather'
 
-        import pdb
-
         assert pretrained, "FeatherSlideEncoder has no non-pretrained models. Please load with pretrained=True."
         from transformers import AutoModel 
-        model = AutoModel.from_pretrained('MahmoodLab/abmil.base.conch_v15.pc108-24k', trust_remote_code=True)
-        pdb.set_trace()
+        from huggingface_hub import snapshot_download
+
+        model_path = snapshot_download(
+            repo_id="MahmoodLab/abmil.base.conch_v15.pc108-24k",
+            revision="main",
+            allow_patterns=["*.py", "pytorch_model.bin", "config.json"]
+        )
+        model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
         precision = torch.float32
         embedding_dim = 768
 
@@ -461,7 +465,6 @@ class FeatherSlideEncoder(BaseSlideEncoder):
     
     def forward(self, batch, device='cuda'):
         z, _ = self.model.forward_features(batch['features'].to(device))
-        # z = self.model.encode_slide_from_patch_features(batch['features'].to(device), batch['coords'].to(device), batch['attributes']['patch_size_level0'])        
         return z
 
 
