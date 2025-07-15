@@ -41,6 +41,8 @@ def encoder_factory(model_name: str, pretrained: bool = True, freeze: bool = Tru
             enc = GigaPathSlideEncoder
         elif 'madeleine' in model_name:
             enc = MadeleineSlideEncoder
+        elif 'feather' in model_name:
+            enc = FeatherSlideEncoder
         elif 'abmil' in model_name:
             enc = ABMILSlideEncoder
         else:
@@ -59,6 +61,7 @@ slide_to_patch_encoder_name = {
     'chief': 'ctranspath',
     'gigapath': 'gigapath',
     'madeleine': 'conch_v1',
+    'feather': 'conch_v15'
 }
 
 
@@ -432,6 +435,33 @@ class TitanSlideEncoder(BaseSlideEncoder):
 
     def forward(self, batch, device='cuda'):
         z = self.model.encode_slide_from_patch_features(batch['features'].to(device), batch['coords'].to(device), batch['attributes']['patch_size_level0'])        
+        return z
+    
+class FeatherSlideEncoder(BaseSlideEncoder):
+
+    def __init__(self, **build_kwargs):
+        """
+        Feather initialization.
+        """
+        super().__init__(**build_kwargs)    
+
+    def _build(self, pretrained=True):
+        self.enc_name = 'feather'
+
+        import pdb
+
+        assert pretrained, "FeatherSlideEncoder has no non-pretrained models. Please load with pretrained=True."
+        from transformers import AutoModel 
+        model = AutoModel.from_pretrained('MahmoodLab/abmil.base.conch_v15.pc108-24k', trust_remote_code=True)
+        pdb.set_trace()
+        precision = torch.float32
+        embedding_dim = 768
+
+        return model, precision, embedding_dim
+    
+    def forward(self, batch, device='cuda'):
+        z, _ = self.model.forward_features(batch['features'].to(device))
+        # z = self.model.encode_slide_from_patch_features(batch['features'].to(device), batch['coords'].to(device), batch['attributes']['patch_size_level0'])        
         return z
 
 
