@@ -455,11 +455,11 @@ class FeatherSlideEncoder(BaseSlideEncoder):
         model_path = snapshot_download(
             repo_id="MahmoodLab/abmil.base.conch_v15.pc108-24k",
             revision="main",
-            allow_patterns=["*.py", "pytorch_model.bin", "config.json"]
+            allow_patterns=["*.py", "model.safetensors", "config.json"]
         )
         model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
         precision = torch.float32
-        embedding_dim = 768
+        embedding_dim = 512
 
         return model, precision, embedding_dim
     
