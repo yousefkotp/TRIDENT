@@ -686,7 +686,7 @@ class WSI:
             include_original_patch = sam_config.get("include_original_patch", False)
 
             patches = []
-            for imgs, _ in  :
+            for imgs, _ in dataloader:
                 for img in imgs:
                     img = img.numpy()
                     
