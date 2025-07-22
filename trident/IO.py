@@ -162,7 +162,11 @@ def remove_lock(path, suffix = None):
     if suffix is not None:
         path = f"{path}_{suffix}"
     lock_file = f"{path}.lock"
-    os.remove(lock_file)
+    try:
+        os.remove(lock_file)
+    except FileNotFoundError:
+        # Lock file doesn't exist, which is fine - the resource is already unlocked
+        pass
 
 #####################
 

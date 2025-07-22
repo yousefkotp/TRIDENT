@@ -8,6 +8,8 @@ python run_batch_of_slides.py --task all --wsi_dir output/wsis --job_dir output 
 """
 
 import argparse
+import time
+import random
 import torch
 from trident import Processor
 
@@ -113,8 +115,30 @@ def build_parser():
                         help='SAM stability score threshold for mask filtering. Defaults to 0.6.')
     parser.add_argument('--sam_min_mask_region_area', type=float, default=0.1,
                         help='SAM minimum mask area as a fraction of image area. Defaults to 0.1.')
+    parser.add_argument('--sam_include_original_patch', action='store_true', default=False,
+                        help='Whether to include the original patch when using SAM. Defaults to False.')
     parser.add_argument('--sam_debug', type=str, default=None,
                         help='Directory name to save SAM segmentation visualizations for debugging. If None, no debug visualizations are saved. Defaults to None.')
+    # Probabilistic Sampling arguments
+    parser.add_argument('--use_prob_sampling', action='store_true', 
+                        help='Use probabilistic sampling for subpatch generation during feature extraction. Defaults to False.')
+    parser.add_argument('--prob_min_subpatches', type=int, default=0,
+                        help='Minimum number of subpatches to sample per patch. Defaults to 0.')
+    parser.add_argument('--prob_max_subpatches', type=int, default=8,
+                        help='Maximum number of subpatches to sample per patch. Defaults to 8.')
+    parser.add_argument('--prob_subpatch_size_min', type=int, default=96,
+                        help='Minimum size for randomly sampled subpatches. Defaults to 96.')
+    parser.add_argument('--prob_subpatch_size_max', type=int, default=224,
+                        help='Maximum size for randomly sampled subpatches. Defaults to 224.')
+    parser.add_argument('--prob_sampling_distribution', type=str, default='uniform',
+                        choices=['uniform', 'poisson', 'geometric'],
+                        help='Distribution for sampling number of subpatches. Defaults to uniform.')
+    parser.add_argument('--prob_poisson_lambda', type=float, default=3.0,
+                        help='Lambda parameter for Poisson distribution (if using Poisson sampling). Defaults to 3.0.')
+    parser.add_argument('--prob_geometric_p', type=float, default=0.3,
+                        help='Success probability for geometric distribution (if using geometric sampling). Defaults to 0.3.')
+    parser.add_argument('--prob_debug', type=str, default=None,
+                        help='Directory name to save probabilistic sampling visualizations for debugging. If None, no debug visualizations are saved. Defaults to None.')
     return parser
 
 
@@ -202,6 +226,7 @@ def run_task(processor, args):
             
             # Prepare SAM configuration if use_sam is True
             sam_config = None
+            prob_sampling_config = None
             if args.use_sam:
                 if args.sam_checkpoint_path is None:
                     raise ValueError("SAM checkpoint path must be provided when use_sam is True")
@@ -213,9 +238,20 @@ def run_task(processor, args):
                     "pred_iou_thresh": args.sam_pred_iou_thresh,
                     "stability_score_thresh": args.sam_stability_score_thresh,
                     "min_mask_region_area": args.sam_min_mask_region_area,
+                    "include_original_patch": args.sam_include_original_patch,
                     "debug": args.sam_debug
                 }
-            
+            elif args.use_prob_sampling:
+                prob_sampling_config = {
+                    "min_subpatches": args.prob_min_subpatches,
+                    "max_subpatches": args.prob_max_subpatches,
+                    "subpatch_size_min": args.prob_subpatch_size_min,
+                    "subpatch_size_max": args.prob_subpatch_size_max,
+                    "sampling_distribution": args.prob_sampling_distribution,
+                    "poisson_lambda": args.prob_poisson_lambda,
+                    "geometric_p": args.prob_geometric_p,
+                    "debug": args.prob_debug
+                }
             processor.run_patch_feature_extraction_job(
                 coords_dir=args.coords_dir or f'{args.mag}x_{args.patch_size}px_{args.overlap}px_overlap',
                 patch_encoder=encoder,
@@ -223,7 +259,9 @@ def run_task(processor, args):
                 saveas='h5',
                 batch_limit=args.batch_size,
                 use_sam=args.use_sam,
-                sam_config=sam_config
+                sam_config=sam_config,
+                use_prob_sampling=args.use_prob_sampling,
+                prob_sampling_config=prob_sampling_config
             )
         else:
             # Minimal example for feature extraction:
@@ -260,4 +298,5 @@ def main():
 
 
 if __name__ == "__main__":
+    time.sleep(random.randint(0, 60))
     main()

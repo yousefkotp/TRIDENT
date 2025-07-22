@@ -6,6 +6,7 @@ import shutil
 from typing import Optional, List, Dict, Any
 from inspect import signature
 import geopandas as gpd
+import torch
 
 from trident.IO import create_lock, remove_lock, is_locked, update_log
 from trident import load_wsi
@@ -470,7 +471,9 @@ class Processor:
         batch_limit: int = 512, 
         saveto: str | None = None,
         use_sam: bool = False,
-        sam_config: Optional[Dict[str, Any]] = None
+        sam_config: Optional[Dict[str, Any]] = None,
+        use_prob_sampling: bool = False,
+        prob_sampling_config: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         The `run_feature_extraction_job` function computes features from the patches generated during the 
@@ -496,7 +499,14 @@ class Processor:
             sam_config (dict, optional):
                 Configuration for SAM feature extraction. Should include keys like 'model_type', 
                 'checkpoint_path', 'sam_version', 'pred_iou_thresh', 'stability_score_thresh', 
-                and 'min_mask_region_area'. Defaults to None.
+                'min_mask_region_area', and 'include_original_patch'. Defaults to None.
+            use_prob_sampling (bool, optional):
+                Whether to use probabilistic sampling for subpatch generation during feature extraction. Defaults to False.
+            prob_sampling_config (dict, optional):
+                Configuration for probabilistic sampling. Should include keys like 'min_subpatches', 
+                'max_subpatches', 'subpatch_size_min', 'subpatch_size_max',
+                'sampling_distribution', 'poisson_lambda', 
+                and 'geometric_p'. Defaults to None.
 
         Returns:
             str: The absolute path to where the features are saved.
@@ -570,7 +580,9 @@ class Processor:
                     saveas=saveas,
                     batch_limit=batch_limit,
                     use_sam=use_sam,
-                    sam_config=sam_config
+                    sam_config=sam_config,
+                    use_prob_sampling=use_prob_sampling,
+                    prob_sampling_config=prob_sampling_config
                 )
 
                 remove_lock(wsi_feats_fp)

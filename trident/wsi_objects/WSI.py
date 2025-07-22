@@ -17,6 +17,7 @@ from trident.IO import (
 )
 from segment_anything import SamAutomaticMaskGenerator, sam_model_registry
 from trident.segmentation_models import SamModelLoader
+from trident.segmentation_models.probabilistic_sampler import ProbabilisticSampler
 import cv2
 import random
 import matplotlib.pyplot as plt
@@ -589,7 +590,9 @@ class WSI:
         saveas: str = 'h5',
         batch_limit: int = 512,
         use_sam: bool = False,
-        sam_config: Optional[Dict[str, Any]] = None
+        sam_config: Optional[Dict[str, Any]] = None,
+        use_prob_sampling: bool = False,
+        prob_sampling_config: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         The `extract_patch_features` function of the class `WSI` extracts feature embeddings 
@@ -619,6 +622,7 @@ class WSI:
                 "checkpoint_path": "/path/to/checkpoint.pth",
                 "sam_version": "sam",  # or "sam2" for SAM 2.0
                 "min_mask_region_area": 0.01,  # Minimum mask area as a fraction of image area
+                "include_original_patch": False,  # Whether to include the original patch along with SAM-generated sub-patches
                 "debug": "sam_visualizations"  # Directory name to save debug visualizations (optional)
             }
 
@@ -656,7 +660,7 @@ class WSI:
             pil=True,
         )
         dataset = WSIPatcherDataset(patcher, patch_transforms)
-        if use_sam:
+        if use_sam or use_prob_sampling:
             dataset.transform = None
         dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=get_num_workers(batch_limit, max_workers=self.max_workers), pin_memory=True)
 
@@ -679,12 +683,17 @@ class WSI:
             )
             sam_loader.load_model()
             min_mask_area_ratio = sam_config.get("min_mask_region_area")
+            include_original_patch = sam_config.get("include_original_patch", False)
 
             patches = []
-            for imgs, _ in dataloader:
+            for imgs, _ in  :
                 for img in imgs:
                     img = img.numpy()
-                    patches.append(img)
+                    
+                    # Conditionally include the original patch
+                    if include_original_patch:
+                        patches.append(img)
+                    
                     masks = sam_loader.generate_masks(img)
 
                     if debug:
@@ -715,20 +724,71 @@ class WSI:
                             print(f"Mask area: {mask_area}")
                             print(f"Mask intensity: {mask_intensity}")
                         print('-' * 100)
+                        
+                        # Save original image
+                        plt.figure(figsize=(10, 10))
+                        plt.imshow(img)
+                        plt.axis('off')
+                        plt.tight_layout()
+                        os.makedirs(debug_dir, exist_ok=True)
+                        plt.savefig(f'{debug_dir}/{image_name}_original.png')
+                        plt.close()
+                        
+                        # Save SAM-segmented image
                         plt.figure(figsize=(10, 10))
                         plt.imshow(img)
                         sam_loader.show_anns(filtered_masks)
                         plt.axis('off')
                         plt.tight_layout()
-                        os.makedirs(debug_dir, exist_ok=True)
-                        plt.savefig(f'{debug_dir}/{image_name}')
+                        plt.savefig(f'{debug_dir}/{image_name}_sam.png')
                         plt.close()
 
             dataset = WSIPatchesDataset(patches, patch_transforms)
             dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=get_num_workers(batch_limit, max_workers=self.max_workers), pin_memory=True)
-
+        elif use_prob_sampling:
+            if prob_sampling_config is None:
+                raise ValueError("Probabilistic sampling config must be provided if use_prob_sampling is True.")
+            
+            # Initialize probabilistic sampler
+            prob_sampler = ProbabilisticSampler(prob_sampling_config)
+            
+            patches = []
+            patch_count = 0
+            subpatch_count = 0
+            for imgs, _ in dataloader:
+                for img in imgs:
+                    img = img.numpy()
+                    if include_original_patch:          
+                        patches.append(img)  # Always include original patch
+                        patch_count += 1
+                    
+                    # Sample subpatches probabilistically
+                    subpatches = prob_sampler.sample_subpatches(img)
+                    subpatch_count += len(subpatches)
+                    
+                    # Add all sampled subpatches
+                    for subpatch in subpatches:
+                        patches.append(subpatch)
+                    
+                    if prob_sampler.debug:
+                        print(f'Patch {patch_count}: Generated {len(subpatches)} subpatches')
+            
+            if prob_sampler.debug:
+                print(f'Total patches processed: {patch_count}')
+                print(f'Total subpatches generated: {subpatch_count}')
+                print(f'Average subpatches per patch: {subpatch_count/patch_count:.2f}')
+                print('-' * 50)
+            
+            dataset = WSIPatchesDataset(patches, patch_transforms)
+            dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=get_num_workers(batch_limit, max_workers=self.max_workers), pin_memory=True)
         features = []
         if use_sam:
+            for imgs in dataloader:
+                imgs = imgs.to(device, dtype=precision)
+                with torch.autocast(device_type='cuda', dtype=precision, enabled=(precision != torch.float32)):
+                    batch_features = patch_encoder(imgs)  
+                features.append(batch_features.cpu().numpy())
+        elif use_prob_sampling:
             for imgs in dataloader:
                 imgs = imgs.to(device, dtype=precision)
                 with torch.autocast(device_type='cuda', dtype=precision, enabled=(precision != torch.float32)):
