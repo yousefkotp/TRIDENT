@@ -9,7 +9,7 @@ from trident.patch_encoder_models.utils.transform_utils import get_eval_transfor
 from trident.IO import get_weights_path, has_internet_connection
 
 """
-This file contains an assortment of pretrained patch encoders, all loadable via the encoder_factory() function.
+This file contains 20+ pretrained patch encoders, all loadable via the encoder_factory() function.
 """
 
 def encoder_factory(model_name: str, **kwargs):
@@ -57,54 +57,10 @@ def encoder_factory(model_name: str, **kwargs):
     Raises:
         ValueError: If `model_name` is not among the recognized encoder names.
     """
-    if model_name == 'conch_v1':
-        enc = Conchv1InferenceEncoder
-    elif model_name == 'conch_v15':
-        enc = Conchv15InferenceEncoder
-    elif model_name == 'uni_v1':
-        enc = UNIInferenceEncoder
-    elif model_name == 'uni_v2':
-        enc = UNIv2InferenceEncoder
-    elif model_name == 'ctranspath':
-        enc = CTransPathInferenceEncoder
-    elif model_name == 'phikon':
-        enc = PhikonInferenceEncoder
-    elif model_name == 'resnet50':
-        enc = ResNet50InferenceEncoder
-    elif model_name == 'gigapath':
-        enc = GigaPathInferenceEncoder
-    elif model_name == 'virchow':
-        enc = VirchowInferenceEncoder
-    elif model_name == 'virchow2':
-        enc = Virchow2InferenceEncoder
-    elif model_name == 'hoptimus0':
-        enc = HOptimus0InferenceEncoder
-    elif model_name == 'hoptimus1':
-        enc = HOptimus1InferenceEncoder
-    elif model_name == 'phikon_v2':
-        enc = Phikonv2InferenceEncoder
-    elif model_name == 'musk':
-        enc = MuskInferenceEncoder
-    elif model_name == 'hibou_l':
-        enc = HibouLInferenceEncoder
-    elif model_name == 'kaiko-vitb8':
-        enc = KaikoB8InferenceEncoder
-    elif model_name == 'kaiko-vitb16':
-        enc = KaikoB16InferenceEncoder
-    elif model_name == 'kaiko-vits8':
-        enc = KaikoS8InferenceEncoder
-    elif model_name == 'kaiko-vits16':
-        enc = KaikoS16InferenceEncoder
-    elif model_name == 'kaiko-vitl14':
-        enc = KaikoL14InferenceEncoder
-    elif model_name == 'lunit-vits8':
-        enc = LunitS8InferenceEncoder
-    elif model_name == 'midnight12k':
-        enc = Midnight12kInferenceEncoder
+    if model_name in encoder_registry:
+        return encoder_registry[model_name](**kwargs)
     else:
         raise ValueError(f"Unknown encoder name {model_name}")
-
-    return enc(**kwargs)
 
 
 class BasePatchEncoder(torch.nn.Module):
@@ -1253,3 +1209,26 @@ class Midnight12kInferenceEncoder(BasePatchEncoder):
             raise ValueError(
                 f"expected return_type to be one of 'cls_token' or 'cls+mean', but got '{self.return_type}'"
             )
+
+encoder_registry = {
+    "conch_v1": Conchv1InferenceEncoder,
+    "conch_v15": Conchv15InferenceEncoder,
+    "uni_v1": UNIInferenceEncoder,
+    "uni_v2": UNIv2InferenceEncoder,
+    "ctranspath": CTransPathInferenceEncoder,
+    "phikon": PhikonInferenceEncoder,
+    "resnet50": ResNet50InferenceEncoder,
+    "gigapath": GigaPathInferenceEncoder,
+    "virchow": VirchowInferenceEncoder,
+    "virchow2": Virchow2InferenceEncoder,
+    "hoptimus0": HOptimus0InferenceEncoder,
+    "hoptimus1": HOptimus1InferenceEncoder,
+    "musk": MuskInferenceEncoder,
+    "hibou_l": HibouLInferenceEncoder,
+    "kaiko-vitb8": KaikoB8InferenceEncoder,
+    "kaiko-vitb16": KaikoB16InferenceEncoder,
+    "kaiko-vits8": KaikoS8InferenceEncoder,
+    "kaiko-vits16": KaikoS16InferenceEncoder,
+    "kaiko-vitl14": KaikoL14InferenceEncoder,
+    "lunit-vits8": LunitS8InferenceEncoder,
+}
