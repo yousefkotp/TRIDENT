@@ -1137,7 +1137,7 @@ class DINOv3InferenceEncoder(BasePatchEncoder):
             self.ensure_has_internet(self.enc_name)
 
             try:
-                pretrained_model_name = "facebook/dinov3-convnext-tiny-pretrain-lvd1689m"
+                pretrained_model_name = "facebook/dinov3-vit7b16-pretrain-lvd1689m"
                 model = AutoModel.from_pretrained(pretrained_model_name)
             except:
                 traceback.print_exc()
@@ -1156,8 +1156,7 @@ class DINOv3InferenceEncoder(BasePatchEncoder):
 
     def forward(self, x):
         out = self.model(x)
-        import pdb; pdb.set_trace()
-        out = out.last_hidden_state[:, 0, :]
+        out = out.last_hidden_state[:, 0, :] # CLS token
         return out
 
 
