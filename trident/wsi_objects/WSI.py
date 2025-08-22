@@ -747,7 +747,8 @@ class WSI:
         device: str = 'cuda:0',
         saveas: str = 'h5',
         batch_limit: int = 512,
-        verbose: bool = False
+        verbose: bool = False,
+        num_workers: Optional[int] = None
     ) -> str:
         """
         The `extract_patch_features` function of the class `WSI` extracts feature embeddings 
@@ -770,6 +771,8 @@ class WSI:
             Maximum batch size for feature extraction. Defaults to 512.
         verbose: bool, optional:
             Whenever to print patch embedding progress. Defaults to False.
+        num_workers: Optional[int], optional:
+            Number of workers to use for the tile dataloader, if set to None the number of workers is automatically inferred. Defaults to None.
 
         Returns:
         --------
@@ -813,7 +816,8 @@ class WSI:
 
 
         dataset = WSIPatcherDataset(patcher, patch_transforms)
-        dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=get_num_workers(batch_limit, max_workers=self.max_workers), pin_memory=False)
+        num_workers = get_num_workers(batch_limit, max_workers=self.max_workers) if num_workers is None else num_workers
+        dataloader = DataLoader(dataset, batch_size=batch_limit, num_workers=num_workers, pin_memory=False)
 
         dataloader = tqdm(dataloader) if verbose else dataloader
 
