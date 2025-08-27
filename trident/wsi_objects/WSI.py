@@ -680,7 +680,7 @@ class WSI:
                      save_coords, self.width, self.height, self.name, overlap)
         return out_fname
 
-    def visualize_coords(self, coords_path: str, save_patch_viz: str) -> str:
+    def visualize_coords(self, coords_path: str, save_patch_viz: str, save_filename=None) -> str:
         """
         The `visualize_coords` function of the class `WSI` overlays patch coordinates 
         onto a scaled thumbnail of the WSI. It creates a visualization of the extracted patches 
@@ -692,6 +692,8 @@ class WSI:
             Path to the file containing the patch coordinates.
         save_patch_viz : str
             Directory path to save the visualization image.
+        save_filename: str, optional
+            The image will be saved as {save_patch_viz}/{save_filename} if not None, {save_path_viz}/{self.name}.jpg otherwise. Defaults to None
 
         Returns:
         --------
@@ -734,7 +736,9 @@ class WSI:
 
         # Save visualization
         os.makedirs(save_patch_viz, exist_ok=True)
-        viz_coords_path = os.path.join(save_patch_viz, f'{self.name}.jpg')
+        if save_filename is None:
+            save_filename = f'{self.name}.jpg'
+        viz_coords_path = os.path.join(save_patch_viz, save_filename)
         img.save(viz_coords_path)
         return viz_coords_path
 

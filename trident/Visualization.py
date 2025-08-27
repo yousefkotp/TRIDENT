@@ -141,3 +141,74 @@ def visualize_heatmap(
             patch.save(os.path.join(topk_dir, f"top_{idx}_score_{scores[i]:.4f}.png"))
 
     return heatmap_path
+
+
+
+def _visualize_coords(wsi, width, height, patch_size_src, xy_iterator, overlay_only, rgba):
+    max_dimension = 1000
+    if width > height:
+        thumbnail_width = max_dimension
+        thumbnail_height = int(thumbnail_width * height / width)
+    else:
+        thumbnail_height = max_dimension
+        thumbnail_width = int(thumbnail_height * width / height)
+
+    downsample_factor = width / thumbnail_width
+
+    thumbnail_patch_size = max(1, int(patch_size_src / downsample_factor))
+
+    # Get thumbnail in right format
+    if overlay_only:
+        if rgba:
+            canvas = np.zeros((thumbnail_height, thumbnail_width, 4)).astype(np.uint8)
+        else:
+            canvas = np.zeros((thumbnail_height, thumbnail_width, 3)).astype(np.uint8)
+    else:
+        canvas = np.array(wsi.get_thumbnail((thumbnail_width, thumbnail_height))).astype(np.uint8)
+
+    color = (255, 0, 0, 255) if rgba else (255, 0, 0)
+
+    # Draw rectangles for patches
+    for (x, y) in xy_iterator:
+        x, y = int(x/downsample_factor), int(y/downsample_factor)
+        thickness = max(1, thumbnail_patch_size // 10)
+        canvas = cv2.rectangle(
+            canvas, 
+            (x, y), 
+            (x + thumbnail_patch_size, y + thumbnail_patch_size), 
+            color, 
+            thickness
+        )
+
+    return canvas
+
+
+def visualize_coords_overlay(width, height, patch_size_src, xy_iterator, rgba):
+    canvas = _visualize_coords(None, width, height, patch_size_src, xy_iterator,
+                               overlay_only=True, rgba=rgba)
+    
+    return Image.fromarray(canvas)
+
+def visualize_coords_with_thumbnail(wsi, patch_size_src, xy_iterator, 
+    dst_mag, dst_pixel_size, patch_size_target, overlap):
+
+    canvas = _visualize_coords(wsi, wsi.width, wsi.height, patch_size_src, xy_iterator,
+                               overlay_only=False, rgba=False)
+    # Add annotations
+    text_area_height = 130
+    text_x_offset = int(canvas.shape[1] * 0.03)  # Offset as 3% of thumbnail width
+    text_y_spacing = 25  # Vertical spacing between lines of text
+
+    canvas[:text_area_height, :300] = (
+        canvas[:text_area_height, :300] * 0.5
+    ).astype(np.uint8)
+
+    patch_mpp_mag = f"{dst_mag}x" if dst_mag is not None else f"{dst_pixel_size}um/px"
+
+    cv2.putText(canvas, f'{len(len(xy_iterator))} patches', (text_x_offset, text_y_spacing), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1)
+    cv2.putText(canvas, f'width={wsi.width}, height={wsi.height}', (text_x_offset, text_y_spacing * 2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+    cv2.putText(canvas, f'mpp={wsi.mpp}, mag={wsi.mag}', (text_x_offset, text_y_spacing * 3), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+    cv2.putText(canvas, f'patch={patch_size_target} w. overlap={overlap} @ {patch_mpp_mag}', (text_x_offset, text_y_spacing * 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+    return Image.fromarray(canvas)

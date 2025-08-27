@@ -9,6 +9,9 @@ from shapely import Polygon
 from PIL import Image
 
 from trident.IO import read_coords_legacy
+from trident.Visualization import visualize_coords_with_thumbnail
+
+
 
 class WSIPatcher:
     """ Iterator class to handle patching, patch scaling and tissue mask intersection """
@@ -343,6 +346,7 @@ class WSIPatcher:
         onto a scaled thumbnail of the WSI. It creates a visualization of the patcher coordinates 
         and returns it as an image.
 
+
         Returns
         -------
         Image.Image
@@ -353,55 +357,14 @@ class WSIPatcher:
         >>> img = wsi_patcher.visualize()
         >>> img.save('test_vis.jpg')
         """
-        max_dimension = 1000
-        if self.width > self.height:
-            thumbnail_width = max_dimension
-            thumbnail_height = int(thumbnail_width * self.height / self.width)
-        else:
-            thumbnail_height = max_dimension
-            thumbnail_width = int(thumbnail_height * self.width / self.height)
-
-        downsample_factor = self.width / thumbnail_width
-
-        thumbnail_patch_size = max(1, int(self.patch_size_src / downsample_factor))
-
-        # Get thumbnail in right format
-        canvas = np.array(self.wsi.get_thumbnail((thumbnail_width, thumbnail_height))).astype(np.uint8)
-
         tmp_coords = self.coords_only
         self.coords_only = True
-        # Draw rectangles for patches
-        for (x, y) in self:
-            x, y = int(x/downsample_factor), int(y/downsample_factor)
-            thickness = max(1, thumbnail_patch_size // 10)
-            canvas = cv2.rectangle(
-                canvas, 
-                (x, y), 
-                (x + thumbnail_patch_size, y + thumbnail_patch_size), 
-                (255, 0, 0), 
-                thickness
-            )
-
+        image = visualize_coords_with_thumbnail(self.wsi, self.patch_size_src, self, 
+            self.dst_mag, self.dst_pixel_size, self.patch_size_target, self.overlap
+        )
         self.coords_only = tmp_coords
 
-        # Add annotations
-        text_area_height = 130
-        text_x_offset = int(thumbnail_width * 0.03)  # Offset as 3% of thumbnail width
-        text_y_spacing = 25  # Vertical spacing between lines of text
-
-        canvas[:text_area_height, :300] = (
-            canvas[:text_area_height, :300] * 0.5
-        ).astype(np.uint8)
-
-        patch_mpp_mag = f"{self.dst_mag}x" if self.dst_mag is not None else f"{self.dst_pixel_size}um/px"
-
-        cv2.putText(canvas, f'{len(self)} patches', (text_x_offset, text_y_spacing), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1)
-        cv2.putText(canvas, f'width={self.width}, height={self.height}', (text_x_offset, text_y_spacing * 2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-
-        cv2.putText(canvas, f'mpp={self.wsi.mpp}, mag={self.wsi.mag}', (text_x_offset, text_y_spacing * 3), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-        cv2.putText(canvas, f'patch={self.patch_size_target} w. overlap={self.overlap} @ {patch_mpp_mag}', (text_x_offset, text_y_spacing * 4), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-
-        return Image.fromarray(canvas)
+        return image
     
     def __repr__(self) -> str:
         patch_mpp_mag = f"{self.dst_mag}x" if self.dst_mag is not None else f"{self.dst_pixel_size}um/px"
