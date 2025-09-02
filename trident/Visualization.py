@@ -205,7 +205,7 @@ def visualize_coords_with_thumbnail(wsi, patch_size_src, xy_iterator,
 
     patch_mpp_mag = f"{dst_mag}x" if dst_mag is not None else f"{dst_pixel_size}um/px"
 
-    cv2.putText(canvas, f'{len(len(xy_iterator))} patches', (text_x_offset, text_y_spacing), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1)
+    cv2.putText(canvas, f'{len(xy_iterator)} patches', (text_x_offset, text_y_spacing), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 1)
     cv2.putText(canvas, f'width={wsi.width}, height={wsi.height}', (text_x_offset, text_y_spacing * 2), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
     cv2.putText(canvas, f'mpp={wsi.mpp}, mag={wsi.mag}', (text_x_offset, text_y_spacing * 3), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
