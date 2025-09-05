@@ -456,7 +456,7 @@ class WSI:
             if save_overlay:
                 overlay_saveto = os.path.join(job_dir, 'overlay', f'{self.name}.overlay.jpg')
                 os.makedirs(os.path.dirname(overlay_saveto), exist_ok=True)
-                rgba_background = np.zeros((thumbnail.height, thumbnail.width, 4))
+                rgba_background = np.zeros((thumbnail.height, thumbnail.width, 4), dtype=np.uint8)
                 overlay = overlay_gdf_on_thumbnail(gdf_contours, rgba_background, None, thumbnail_width / self.width)
                 Image.fromarray(overlay).save(overlay_saveto)
 
