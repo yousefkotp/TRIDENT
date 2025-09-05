@@ -361,7 +361,9 @@ class WSI:
         batch_size: int = 16,
         device: str = 'cuda:0',
         verbose=False,
-        num_workers=None
+        num_workers=None,
+        save_thumbnails=True,
+        save_overlay=False
     ) -> Union[str, gpd.GeoDataFrame]:
         """
         The `segment_tissue` function of the class `WSI` segments tissue regions in the WSI using 
@@ -386,8 +388,12 @@ class WSI:
             Whenever to print segmentation progress. Defaults to False.
         num_workers: Optional[int], optional:
             Number of workers to use for the tile dataloader, if set to None the number of workers is automatically inferred. Defaults to None.
-
-
+        save_thumbnail: bool, optional:
+            Whenever to save a thumbnail in {job_dir}/thumbnails/{slide_name}.jpg. This is ignored if job_dir is None. Defaults to True
+        save_overlay: 
+            Whenever to save an overlay-only file for the resulting tissue segmentation at {job_dir}/overlay/{slide_name}.overlay.png. This is ignored if job_dir is None. Defaults to False   
+        
+            
         Returns:
         --------
         Union[str, gpd.GeoDataFrame]:
@@ -441,10 +447,18 @@ class WSI:
         )
         if job_dir is not None:
 
-            # Save thumbnail image
-            thumbnail_saveto = os.path.join(job_dir, 'thumbnails', f'{self.name}.jpg')
-            os.makedirs(os.path.dirname(thumbnail_saveto), exist_ok=True)
-            thumbnail.save(thumbnail_saveto)
+            if save_thumbnails:
+                # Save thumbnail image
+                thumbnail_saveto = os.path.join(job_dir, 'thumbnails', f'{self.name}.jpg')
+                os.makedirs(os.path.dirname(thumbnail_saveto), exist_ok=True)
+                thumbnail.save(thumbnail_saveto)
+
+            if save_overlay:
+                overlay_saveto = os.path.join(job_dir, 'overlay', f'{self.name}.overlay.jpg')
+                os.makedirs(os.path.dirname(overlay_saveto), exist_ok=True)
+                rgba_background = np.zeros((thumbnail.height, thumbnail.width, 4))
+                overlay_gdf_on_thumbnail(gdf_contours, rgba_background, contours_saveto, thumbnail_width / self.width)
+                
 
             # Save geopandas contours
             gdf_saveto = os.path.join(job_dir, 'contours_geojson', f'{self.name}.geojson')

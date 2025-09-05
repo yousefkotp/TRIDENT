@@ -797,7 +797,7 @@ def scale_contours(contours, scale, is_nested=False):
 
 def overlay_gdf_on_thumbnail(
     gdf_contours, thumbnail, contours_saveto, scale, tissue_color=(0, 255, 0), hole_color=(255, 0, 0)
-):
+) -> np.ndarray:
     """
     The `overlay_gdf_on_thumbnail` function overlays polygons from a GeoDataFrame onto a scaled 
     thumbnail image using OpenCV. This is particularly useful for visualizing tissue regions and 
@@ -808,9 +808,9 @@ def overlay_gdf_on_thumbnail(
     gdf_contours : gpd.GeoDataFrame
         A GeoDataFrame containing the polygons to overlay, with a `geometry` column.
     thumbnail : np.ndarray
-        The thumbnail image as a NumPy array.
-    contours_saveto : str
-        The file path to save the annotated thumbnail.
+        The thumbnail image as a NumPy array with shape (W, H, 3) or (W, H, 4).
+    contours_saveto : Optional[str]
+        The file path to save the annotated thumbnail. If None, then the thumbnail is not saved
     scale : float
         The scaling factor between the GeoDataFrame coordinates and the thumbnail resolution.
     tissue_color : tuple, optional
@@ -833,6 +833,11 @@ def overlay_gdf_on_thumbnail(
     ... )
     """
 
+    # For RGBA (useful for creating overlays with transparent background)
+    if thumbnail.shape[-1] == 4:
+        tissue_color = tissue_color + (255,)
+        hole_color = hole_color + (255,)
+
     for poly in gdf_contours.geometry:
         if poly.is_empty:
             continue
@@ -854,9 +859,11 @@ def overlay_gdf_on_thumbnail(
     cropped_annotated = thumbnail[ymin:ymax, xmin:xmax]
  
     # Save the annotated image
-    os.makedirs(os.path.dirname(contours_saveto), exist_ok=True)
     cropped_annotated = cv2.cvtColor(cropped_annotated, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(contours_saveto, cropped_annotated)
+    if contours_saveto is not None:
+        os.makedirs(os.path.dirname(contours_saveto), exist_ok=True)
+        cv2.imwrite(contours_saveto, cropped_annotated)
+    return cropped_annotated
 
 # .tools.register_tool(imports=["import numpy as np"])
 def get_num_workers(batch_size: int, 
