@@ -833,8 +833,10 @@ def overlay_gdf_on_thumbnail(
     ... )
     """
 
+    is_rgba = thumbnail.shape[-1] == 4
+
     # For RGBA (useful for creating overlays with transparent background)
-    if thumbnail.shape[-1] == 4:
+    if is_rgba:
         tissue_color = tissue_color + (255,)
         hole_color = hole_color + (255,)
 
@@ -854,12 +856,14 @@ def overlay_gdf_on_thumbnail(
                 cv2.polylines(thumbnail, [interior_coords], isClosed=True, color=hole_color, thickness=2)
 
     # Crop black borders of the annotated image
-    nz = np.nonzero(cv2.cvtColor(thumbnail, cv2.COLOR_BGR2GRAY))  # Non-zero pixel locations
+    gray_color = cv2.COLOR_BGRA2GRAY if is_rgba else cv2.COLOR_BGR2GRAY
+    nz = np.nonzero(cv2.cvtColor(thumbnail, gray_color))  # Non-zero pixel locations
     xmin, xmax, ymin, ymax = np.min(nz[1]), np.max(nz[1]), np.min(nz[0]), np.max(nz[0])
     cropped_annotated = thumbnail[ymin:ymax, xmin:xmax]
  
     # Save the annotated image
-    cropped_annotated = cv2.cvtColor(cropped_annotated, cv2.COLOR_BGR2RGB)
+    color = cv2.COLOR_BGRA2RGBA if is_rgba else cv2.COLOR_BGR2RGB
+    cropped_annotated = cv2.cvtColor(cropped_annotated, color)
     if contours_saveto is not None:
         os.makedirs(os.path.dirname(contours_saveto), exist_ok=True)
         cv2.imwrite(contours_saveto, cropped_annotated)
