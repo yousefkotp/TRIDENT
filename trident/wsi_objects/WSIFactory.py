@@ -5,16 +5,18 @@ from typing import Optional, Literal, Union
 from trident.wsi_objects.OpenSlideWSI import OpenSlideWSI
 from trident.wsi_objects.ImageWSI import ImageWSI
 from trident.wsi_objects.CuCIMWSI import CuCIMWSI
+from trident.wsi_objects.SdpcWSI import SdpcWSI
 
-WSIReaderType = Literal['openslide', 'image', 'cucim']
+WSIReaderType = Literal['openslide', 'image', 'cucim', 'sdpc']
 OPENSLIDE_EXTENSIONS = {'.svs', '.tif', '.tiff', '.ndpi', '.vms', '.vmu', '.scn', '.mrxs'}
 CUCIM_EXTENSIONS = {'.svs', '.tif', '.tiff'}
+SDPC_EXTENSIONS = {'.sdpc'}
 
 def load_wsi(
     slide_path: str,
     reader_type: Optional[WSIReaderType] = None,
     **kwargs
-) -> Union[OpenSlideWSI, ImageWSI, CuCIMWSI]:
+) -> Union[OpenSlideWSI, ImageWSI, CuCIMWSI, SdpcWSI]:
     """
     Load a whole-slide image (WSI) using the appropriate backend.
 
@@ -50,6 +52,15 @@ def load_wsi(
 
     elif reader_type == 'image':
         return ImageWSI(slide_path=slide_path, **kwargs)
+    
+    elif reader_type == 'sdpc':
+        if ext in SDPC_EXTENSIONS:
+            return SdpcWSI(slide_path=slide_path, **kwargs)
+        else:
+            raise ValueError(
+                f"Unsupported file format '{ext}' for SDPC. "
+                f"Supported whole-slide image formats are: {', '.join(SDPC_EXTENSIONS)}."
+            )
 
     elif reader_type == 'cucim':
         if ext in CUCIM_EXTENSIONS:
@@ -63,6 +74,8 @@ def load_wsi(
     elif reader_type is None:
         if ext in OPENSLIDE_EXTENSIONS:
             return OpenSlideWSI(slide_path=slide_path, **kwargs)
+        elif ext in SDPC_EXTENSIONS:
+            return SdpcWSI(slide_path=slide_path, **kwargs)
         else:
             return ImageWSI(slide_path=slide_path, **kwargs)
 
