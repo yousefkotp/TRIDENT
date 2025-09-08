@@ -457,7 +457,8 @@ class WSI:
                 overlay_saveto = os.path.join(job_dir, 'overlay', f'{self.name}.overlay.png')
                 os.makedirs(os.path.dirname(overlay_saveto), exist_ok=True)
                 rgba_background = np.zeros((thumbnail.height, thumbnail.width, 4), dtype=np.uint8)
-                overlay = overlay_gdf_on_thumbnail(gdf_contours, rgba_background, None, thumbnail_width / self.width)
+                overlay = overlay_gdf_on_thumbnail(gdf_contours, rgba_background, None, thumbnail_width / self.width, 
+                                                   crop=False)
                 Image.fromarray(overlay).save(overlay_saveto)
 
             # Save geopandas contours

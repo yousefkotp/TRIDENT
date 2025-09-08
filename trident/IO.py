@@ -796,7 +796,7 @@ def scale_contours(contours, scale, is_nested=False):
 
 
 def overlay_gdf_on_thumbnail(
-    gdf_contours, thumbnail, contours_saveto, scale, tissue_color=(0, 255, 0), hole_color=(255, 0, 0)
+    gdf_contours, thumbnail, contours_saveto, scale, tissue_color=(0, 255, 0), hole_color=(255, 0, 0), crop=True
 ) -> np.ndarray:
     """
     The `overlay_gdf_on_thumbnail` function overlays polygons from a GeoDataFrame onto a scaled 
@@ -817,6 +817,8 @@ def overlay_gdf_on_thumbnail(
         The color (BGR format) for tissue polygons. Defaults to green `(0, 255, 0)`.
     hole_color : tuple, optional
         The color (BGR format) for hole polygons. Defaults to red `(255, 0, 0)`.
+    crop: bool, optional
+        Whenever to crop black borders. Defaults to True
 
     Returns:
     --------
@@ -855,19 +857,21 @@ def overlay_gdf_on_thumbnail(
                 interior_coords = (np.array(interior.coords) * scale).astype(np.int32)
                 cv2.polylines(thumbnail, [interior_coords], isClosed=True, color=hole_color, thickness=2)
 
-    # Crop black borders of the annotated image
-    gray_color = cv2.COLOR_BGRA2GRAY if is_rgba else cv2.COLOR_BGR2GRAY
-    nz = np.nonzero(cv2.cvtColor(thumbnail, gray_color))  # Non-zero pixel locations
-    xmin, xmax, ymin, ymax = np.min(nz[1]), np.max(nz[1]), np.min(nz[0]), np.max(nz[0])
-    cropped_annotated = thumbnail[ymin:ymax, xmin:xmax]
- 
-    # Save the annotated image
-    color = cv2.COLOR_BGRA2RGBA if is_rgba else cv2.COLOR_BGR2RGB
-    cropped_annotated = cv2.cvtColor(cropped_annotated, color)
+    if crop:
+        # Crop black borders of the annotated image
+        gray_color = cv2.COLOR_BGRA2GRAY if is_rgba else cv2.COLOR_BGR2GRAY
+        nz = np.nonzero(cv2.cvtColor(thumbnail, gray_color))  # Non-zero pixel locations
+        xmin, xmax, ymin, ymax = np.min(nz[1]), np.max(nz[1]), np.min(nz[0]), np.max(nz[0])
+        cropped_annotated = thumbnail[ymin:ymax, xmin:xmax]
+    
+        # Save the annotated image
+        color = cv2.COLOR_BGRA2RGBA if is_rgba else cv2.COLOR_BGR2RGB
+        thumbnail = cv2.cvtColor(cropped_annotated, color)
+
     if contours_saveto is not None:
         os.makedirs(os.path.dirname(contours_saveto), exist_ok=True)
-        cv2.imwrite(contours_saveto, cropped_annotated)
-    return cropped_annotated
+        cv2.imwrite(contours_saveto, thumbnail)
+    return thumbnail
 
 # .tools.register_tool(imports=["import numpy as np"])
 def get_num_workers(batch_size: int, 
