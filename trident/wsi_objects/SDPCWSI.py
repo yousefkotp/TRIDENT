@@ -1,16 +1,15 @@
 from __future__ import annotations
 import numpy as np
-import opensdpc
 from PIL import Image
-from typing import List, Tuple, Union, Optional
+from typing import Tuple, Union
 from trident.wsi_objects.WSI import WSI, ReadMode
 
 
-class SdpcWSI(WSI):
+class SDPCWSI(WSI):
 
     def __init__(self, slide_path, **kwargs) -> None:
         """
-        Initialize an SdpcWSI instance.
+        Initialize an SDPCWSI instance.
 
         Parameters
         ----------
@@ -24,15 +23,15 @@ class SdpcWSI(WSI):
 
         Example
         -------
-        >>> wsi = SdpcWSI(slide_path="path/to/wsi.svs", lazy_init=False)
+        >>> wsi = SDPCWSI(slide_path="path/to/wsi.svs", lazy_init=False)
         >>> print(wsi)
-        <width=100000, height=80000, backend=SdpcWSI, mpp=0.25, mag=40>
+        <width=100000, height=80000, backend=SDPCWSI, mpp=0.25, mag=40>
         """
         super().__init__(slide_path, **kwargs)
 
     def _lazy_initialize(self) -> None:
         """
-        Lazily initialize the WSI using OpenSdpc.
+        Lazily initialize the WSI using OpenSDPC.
 
         This method opens a whole-slide image using the OpenSdpc backend, extracting
         key metadata including dimensions, magnification, and multiresolution pyramid
@@ -59,6 +58,11 @@ class SdpcWSI(WSI):
         - `gdf_contours`: loaded from `tissue_seg_path` if provided.
         """
 
+        try:
+            import opensdpc
+        except ImportError:
+            raise ImportError("The opensdpc package is not installed. Please install it using `pip install opensdpc`.")
+        
         super()._lazy_initialize()
 
         if not self.lazy_init:
