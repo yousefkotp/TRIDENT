@@ -2,14 +2,14 @@ from __future__ import annotations
 import numpy as np
 import openslide
 from PIL import Image
-from typing import List, Tuple, Union, Optional
+from typing import List, Tuple, Union, Optional, Any
 
 from trident.wsi_objects.WSI import WSI, ReadMode
 
 
 class OpenSlideWSI(WSI):
 
-    def __init__(self, slide_path, **kwargs) -> None:
+    def __init__(self, slide_path: str, **kwargs: Any) -> None:
         """
         Initialize an OpenSlideWSI instance.
 
@@ -23,8 +23,8 @@ class OpenSlideWSI(WSI):
 
         Please refer to WSI constructor for all parameters. 
 
-        Example
-        -------
+        Examples
+        --------
         >>> wsi = OpenSlideWSI(slide_path="path/to/wsi.svs", lazy_init=False)
         >>> print(wsi)
         <width=100000, height=80000, backend=OpenSlideWSI, mpp=0.25, mag=40>
@@ -205,8 +205,8 @@ class OpenSlideWSI(WSI):
         ValueError
             If `read_as` is not one of 'pil' or 'numpy'.
 
-        Example
-        -------
+        Examples
+        --------
         >>> region = wsi.read_region((0, 0), level=0, size=(512, 512), read_as='numpy')
         >>> print(region.shape)
         (512, 512, 3)

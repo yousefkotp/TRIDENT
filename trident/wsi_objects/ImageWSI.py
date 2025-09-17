@@ -28,8 +28,8 @@ class ImageWSI(WSI):
         ValueError
             If the required 'mpp' argument is not provided.
 
-        Example
-        -------
+        Examples
+        --------
         >>> wsi = ImageWSI("path/to/image.png", lazy_init=False, mpp=0.51)
         >>> print(wsi)
         <width=5120, height=3840, backend=ImageWSI, mpp=0.51, mag=20>
@@ -153,8 +153,8 @@ class ImageWSI(WSI):
         ValueError
             If `level` is not 0 or if `read_as` is not one of the supported options.
 
-        Example
-        -------
+        Examples
+        --------
         >>> region = wsi.read_region((0, 0), level=0, size=(512, 512), read_as='numpy')
         >>> print(region.shape)
         (512, 512, 3)

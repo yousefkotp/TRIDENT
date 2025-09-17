@@ -1,6 +1,6 @@
 import traceback
 from abc import abstractmethod
-from typing import Literal, Optional
+from typing import Literal, Optional, Any, Dict, Tuple, Callable
 import torch
 import os 
 
@@ -12,7 +12,7 @@ from trident.IO import get_weights_path, has_internet_connection
 This file contains 20+ pretrained patch encoders, all loadable via the encoder_factory() function.
 """
 
-def encoder_factory(model_name: str, **kwargs):
+def encoder_factory(model_name: str, **kwargs) -> torch.nn.Module:
     """
     Instantiate a patch encoder model by name.
 
@@ -20,42 +20,60 @@ def encoder_factory(model_name: str, **kwargs):
     `model_name`. Each encoder is designed for extracting representations from image patches
     using specific backbones or pretraining strategies.
 
-    Args:
-        model_name (str): Name of the encoder to instantiate. Must be one of the following:
-            - "conch_v1"
-            - "conch_v15"
-            - "uni_v1"
-            - "uni_v2"
-            - "ctranspath"
-            - "phikon"
-            - "phikon_v2"
-            - "resnet50"
-            - "gigapath"
-            - "virchow"
-            - "virchow2"
-            - "hoptimus0"
-            - "hoptimus1"
-            - "musk"
-            - "hibou_l"
-            - "kaiko-vitb8"
-            - "kaiko-vitb16"
-            - "kaiko-vits8"
-            - "kaiko-vits16"
-            - "kaiko-vitl14"
-            - "lunit-vits8"
+    Parameters
+    ----------
+    model_name : str
+        Name of the encoder to instantiate. Must be one of the following:
+        - "conch_v1"
+        - "conch_v15"
+        - "uni_v1"
+        - "uni_v2"
+        - "ctranspath"
+        - "phikon"
+        - "phikon_v2"
+        - "resnet50"
+        - "gigapath"
+        - "virchow"
+        - "virchow2"
+        - "hoptimus0"
+        - "hoptimus1"
+        - "musk"
+        - "hibou_l"
+        - "kaiko-vitb8"
+        - "kaiko-vitb16"
+        - "kaiko-vits8"
+        - "kaiko-vits16"
+        - "kaiko-vitl14"
+        - "lunit-vits8"
 
-        **kwargs: Optional keyword arguments passed directly to the encoder constructor. These
-            may include parameters such as:
-            - weights_path (str): Path to a local checkpoint (optional)
-            - normalize (bool): Whether to normalize output embeddings (default: False)
-            - with_proj (bool): Whether to apply the projection head (default: True)
-            - any model-specific configuration parameters
+    **kwargs : dict
+        Optional keyword arguments passed directly to the encoder constructor. These
+        may include parameters such as:
+        - weights_path (str): Path to a local checkpoint (optional)
+        - normalize (bool): Whether to normalize output embeddings (default: False)
+        - with_proj (bool): Whether to apply the projection head (default: True)
+        - any model-specific configuration parameters
 
-    Returns:
-        torch.nn.Module: An instance of the specified encoder model.
+    Returns
+    -------
+    torch.nn.Module
+        An instance of the specified encoder model.
 
-    Raises:
-        ValueError: If `model_name` is not among the recognized encoder names.
+    Raises
+    ------
+    ValueError
+        If `model_name` is not among the recognized encoder names.
+
+    Examples
+    --------
+    >>> # Load a high-performance vision transformer
+    >>> encoder = encoder_factory("conch_v15")
+    >>> 
+    >>> # Load with custom weights
+    >>> encoder = encoder_factory("uni_v2", weights_path="custom_weights.pth")
+    >>> 
+    >>> # Load a fast CNN model
+    >>> encoder = encoder_factory("ctranspath")
     """
     if model_name in encoder_registry:
         return encoder_registry[model_name](**kwargs)
@@ -67,22 +85,29 @@ class BasePatchEncoder(torch.nn.Module):
 
     _has_internet = has_internet_connection()
     
-    def __init__(self, weights_path: Optional[str] = None, **build_kwargs):
+    def __init__(self, weights_path: Optional[str] = None, **build_kwargs: Dict[str, Any]):
         """
         Initialize BasePatchEncoder.
 
-        Args:
-            weights_path (Optional[str]): 
-                Optional path to local model weights. If None, the model is loaded from the model registry or downloaded from Hugging Face Hub.
-            **build_kwargs: 
-                Additional keyword arguments passed to the `_build()` method to customize model creation.
+        Parameters
+        ----------
+        weights_path : Optional[str]
+            Optional path to local model weights. If None, the model is loaded from the model registry or downloaded from Hugging Face Hub.
+        **build_kwargs : dict
+            Additional keyword arguments passed to the `_build()` method to customize model creation.
 
-        Attributes:
-            enc_name (Optional[str]): Name of the encoder architecture (set during `_build()`).
-            weights_path (Optional[str]): Path to local model weights (if provided).
-            model (nn.Module): The instantiated encoder model.
-            eval_transforms (Callable): Evaluation-time preprocessing transforms.
-            precision (torch.dtype): Precision used for inference.
+        Attributes
+        ----------
+        enc_name : Optional[str]
+            Name of the encoder architecture (set during `_build()`).
+        weights_path : Optional[str]
+            Path to local model weights (if provided).
+        model : nn.Module
+            The instantiated encoder model.
+        eval_transforms : Callable
+            Evaluation-time preprocessing transforms.
+        precision : torch.dtype
+            Precision used for inference.
         """
 
         super().__init__()
@@ -90,11 +115,11 @@ class BasePatchEncoder(torch.nn.Module):
         self.weights_path: Optional[str] = weights_path
         self.model, self.eval_transforms, self.precision = self._build(**build_kwargs)
 
-    def ensure_valid_weights_path(self, weights_path):
+    def ensure_valid_weights_path(self, weights_path: str) -> None:
         if weights_path and not os.path.isfile(weights_path):
             raise FileNotFoundError(f"Expected checkpoint at '{weights_path}', but the file was not found.")
     
-    def ensure_has_internet(self, enc_name):
+    def ensure_has_internet(self, enc_name: str) -> None:
         if not BasePatchEncoder._has_internet:
             raise FileNotFoundError(
                 f"Internet connection does seem not available. Auto checkpoint download is disabled."
@@ -102,7 +127,7 @@ class BasePatchEncoder(torch.nn.Module):
                 f"and place it in the model registry in:\n`trident/patch_encoder_models/local_ckpts.json`"
             )
         
-    def _get_weights_path(self):
+    def _get_weights_path(self) -> str:
         """
         If self.weights_path is provided, use it. 
         If not provided, check the model registry. 
@@ -117,7 +142,7 @@ class BasePatchEncoder(torch.nn.Module):
             self.ensure_valid_weights_path(weights_path)
             return weights_path
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Can be overwritten if model requires special forward pass.
         """
@@ -125,25 +150,26 @@ class BasePatchEncoder(torch.nn.Module):
         return z
         
     @abstractmethod
-    def _build(self, **build_kwargs):
+    def _build(self, **build_kwargs: Dict[str, Any]) -> Tuple[torch.nn.Module, Callable, torch.dtype]:
         pass
 
 
 class CustomInferenceEncoder(BasePatchEncoder):
 
-    def __init__(self, enc_name, model, transforms, precision):
+    def __init__(self, enc_name: str, model: torch.nn.Module, transforms: Callable, precision: torch.dtype):
         """
         Initialize a CustomInferenceEncoder from user-defined components.
 
         This class is used when the model, transforms, and precision are pre-instantiated externally 
         and should be injected directly into the encoder wrapper.
 
-        Args:
-            enc_name (str): 
-                A unique name or identifier for the encoder (used for registry or logging).
-            model (torch.nn.Module): 
-                A PyTorch model instance to use for inference.
-            transforms (Callable): 
+        Parameters
+        ----------
+        enc_name : str
+            A unique name or identifier for the encoder (used for registry or logging).
+        model : torch.nn.Module
+            A PyTorch model instance to use for inference.
+        transforms : Callable 
                 A callable (e.g., torchvision or timm transform) to preprocess input images for evaluation.
             precision (torch.dtype): 
                 The precision to use for inference (e.g., torch.float32, torch.float16).
@@ -154,7 +180,7 @@ class CustomInferenceEncoder(BasePatchEncoder):
         self.eval_transforms = transforms
         self.precision = precision
         
-    def _build(self):
+    def _build(self) -> Tuple[None, None, None]:
         return None, None, None
 
 

@@ -21,8 +21,8 @@ class SDPCWSI(WSI):
 
         Please refer to WSI constructor for all parameters. 
 
-        Example
-        -------
+        Examples
+        --------
         >>> wsi = SDPCWSI(slide_path="path/to/wsi.svs", lazy_init=False)
         >>> print(wsi)
         <width=100000, height=80000, backend=SDPCWSI, mpp=0.25, mag=40>
@@ -142,8 +142,8 @@ class SDPCWSI(WSI):
         ValueError
             If `read_as` is not one of 'pil' or 'numpy'.
 
-        Example
-        -------
+        Examples
+        --------
         >>> region = wsi.read_region((0, 0), level=0, size=(512, 512), read_as='numpy')
         >>> print(region.shape)
         (512, 512, 3)
