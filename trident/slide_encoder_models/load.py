@@ -4,7 +4,7 @@ import torch
 import traceback
 from abc import abstractmethod
 from einops import rearrange
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 
 from trident.IO import get_weights_path
 
@@ -12,18 +12,25 @@ from trident.IO import get_weights_path
 This file contains 10+ pretrained slide encoders, all loadable via the encoder_factory() function.
 """
 
-def encoder_factory(model_name: str, pretrained: bool = True, freeze: bool = True, **kwargs) -> torch.nn.Module:
+def encoder_factory(model_name: str, pretrained: bool = True, freeze: bool = True, **kwargs: Dict[str, Any]) -> torch.nn.Module:
         """
         Build a slide encoder model.
 
-        Args:
-            model_name (str): Name of the model to build.
-            pretrained (bool): Whether to load pretrained weights.
-            freeze (bool): Whether to freeze the weights of the model.
-            **kwargs: Additional arguments to pass to the model constructor.
+        Parameters
+        ----------
+        model_name : str
+            Name of the model to build.
+        pretrained : bool
+            Whether to load pretrained weights.
+        freeze : bool
+            Whether to freeze the weights of the model.
+        **kwargs : dict
+            Additional arguments to pass to the model constructor.
 
-        Returns:
-            torch.nn.Module: The slide encoder model.
+        Returns
+        -------
+        torch.nn.Module
+            The slide encoder model.
         """
 
         if model_name.startswith('mean-'):
@@ -51,7 +58,7 @@ slide_to_patch_encoder_name = {
 
 class BaseSlideEncoder(torch.nn.Module):
     
-    def __init__(self, freeze: bool = True, **build_kwargs: dict) -> None:
+    def __init__(self, freeze: bool = True, **build_kwargs: Dict[str, Any]) -> None:
         """
         Parent class for all pretrained slide encoders.
         """
@@ -65,7 +72,7 @@ class BaseSlideEncoder(torch.nn.Module):
                 param.requires_grad = False
             self.model.eval()
         
-    def forward(self, batch):
+    def forward(self, batch: torch.Tensor) -> torch.Tensor:
         """
         Can be overwritten if model requires special forward pass.
         """
@@ -73,7 +80,7 @@ class BaseSlideEncoder(torch.nn.Module):
         return z
         
     @abstractmethod
-    def _build(self, **build_kwargs):
+    def _build(self, **build_kwargs: Dict[str, Any]) -> Tuple[torch.nn.Module, torch.dtype, int]:
         """
         Initialization method, must be defined in child class.
         """
@@ -94,10 +101,11 @@ class CustomSlideEncoder(BaseSlideEncoder):
         This class is used when the model and precision are pre-instantiated externally 
         and should be injected directly into the encoder wrapper.
 
-        Args:
-            enc_name (str): 
-                A unique name or identifier for the encoder.
-            model (torch.nn.Module): 
+        Parameters
+        ----------
+        enc_name : str
+            A unique name or identifier for the encoder.
+        model : torch.nn.Module 
                 A PyTorch model instance to use for slide-level inference.
             precision (torch.dtype, optional): 
                 The precision to use for inference (e.g., torch.float32, torch.float16).
@@ -111,13 +119,13 @@ class CustomSlideEncoder(BaseSlideEncoder):
         self.precision = precision
         self.embedding_dim = embedding_dim or getattr(model, 'embedding_dim', None)
 
-    def _build(self, **build_kwargs):
+    def _build(self, **build_kwargs: Dict[str, Any]) -> Tuple[None, None, None]:
         return None, None, None
 
 
 class ABMILSlideEncoder(BaseSlideEncoder):
 
-    def __init__(self, **build_kwargs):
+    def __init__(self, **build_kwargs: Dict[str, Any]):
         """
         ABMIL initialization.
         """

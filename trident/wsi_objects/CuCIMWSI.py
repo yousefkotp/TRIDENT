@@ -1,14 +1,14 @@
 from __future__ import annotations
 import numpy as np
 from PIL import Image
-from typing import Tuple, Optional, Union
+from typing import Tuple, Optional, Union, Any
 
 from trident.wsi_objects.WSI import WSI, ReadMode
 
 
 class CuCIMWSI(WSI):
 
-    def __init__(self, slide_path, **kwargs) -> None:
+    def __init__(self, slide_path: str, **kwargs: Any) -> None:
         """
         Initialize a WSI instance using CuCIM as a backend.
 
@@ -22,8 +22,8 @@ class CuCIMWSI(WSI):
 
         Please refer to WSI constructor for all parameters. 
 
-        Example
-        -------
+        Examples
+        --------
         >>> wsi = CuCIMWSI(slide_path="path/to/wsi.svs", lazy_init=False)
         >>> print(wsi)
         <width=100000, height=80000, backend=CuCIMWSI, mpp=0.25, mag=40>
@@ -182,14 +182,14 @@ class CuCIMWSI(WSI):
         """
         Generate a thumbnail image of the WSI.
 
-        Args:
-        -----
+        Parameters
+        ----------
         size : tuple[int, int]
             A tuple specifying the desired width and height of the thumbnail.
 
-        Returns:
-        --------
-        Image.Image:
+        Returns
+        -------
+        Image.Image
             The thumbnail as a PIL Image in RGB format.
         """
         target_width, target_height = size
@@ -247,8 +247,8 @@ class CuCIMWSI(WSI):
         ValueError
             If `read_as` is not one of the supported options.
 
-        Example
-        -------
+        Examples
+        --------
         >>> region = wsi.read_region((1000, 1000), level=0, size=(512, 512), read_as='pil')
         >>> region.show()
         """
@@ -269,12 +269,12 @@ class CuCIMWSI(WSI):
         """
         Return the (width, height) dimensions of the CuCIM-managed WSI.
 
-        Returns:
-        --------
-        Tuple[int, int]:
+        Returns
+        -------
+        Tuple[int, int]
             A tuple containing the width and height of the WSI in pixels.
 
-        Example:
+        Examples
         --------
         >>> wsi.get_dimensions()
         (100000, 80000)
