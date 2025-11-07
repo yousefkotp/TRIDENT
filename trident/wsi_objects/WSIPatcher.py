@@ -106,7 +106,7 @@ class WSIPatcher:
             Custom coordinates to use. Defaults to None.
         threshold : float, optional
             Minimum proportion of the patch under tissue to be kept.
-            This argument is ignored if mask=None, passing threshold=0 will be faster. Defaults to 0.15.
+            This argument is ignored if mask=None, passing threshold=0 will be faster. Defaults to 0.0.
         pil : bool, optional
             Whether to get patches as `PIL.Image` (numpy array by default). Defaults to False.
         """

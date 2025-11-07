@@ -55,7 +55,7 @@ class Processor:
                 [DEPRECATED as of v0.2.0] An optional directory for caching WSIs locally. If specified, slides will be copied 
                 from the source directory to this local directory before processing, improving performance 
                 when the source is a network drive. Defaults to None.
-            clear_cache (str, optional):
+            clear_cache (bool, optional):
                 [DEPRECATED as of v0.2.0] A flag indicating whether slides in the cache should be deleted after processing. 
                 This helps manage storage space. Defaults to False. 
             skip_errors (bool, optional): 
