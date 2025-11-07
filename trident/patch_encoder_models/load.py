@@ -825,7 +825,7 @@ class GigaPathInferenceEncoder(BasePatchEncoder):
                 transforms.Normalize(mean, std),
             ]
         )
-        precision = torch.float32
+        precision = torch.float16
         return model, eval_transform, precision
 
     
