@@ -1219,7 +1219,7 @@ class Midnight12kInferenceEncoder(BasePatchEncoder):
             ]
         )
 
-        precision = torch.float32
+        precision = torch.float16
         self.return_type = return_type
         return model, eval_transform, precision
 
