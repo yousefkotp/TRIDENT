@@ -30,6 +30,7 @@ timm = "0.9.16"
 einops_exts = "*"
 scipy = "*"
 segmentation-models-pytorch = "*"
+safetensors = "*"
 
 [tool.poetry.dev-dependencies]
 # Optional development dependencies 

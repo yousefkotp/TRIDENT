@@ -575,12 +575,18 @@ class ResNet50InferenceEncoder(BasePatchEncoder):
         if weights_path:
             try:
                 model = timm.create_model("resnet50", pretrained=False, **timm_kwargs)
-                model.load_state_dict(torch.load(weights_path, map_location="cpu"), strict=False)
+                if weights_path.suffix == ".safetensors":
+                    from safetensors.torch import load_file
+                    state_dict = load_file(weights_path)
+                else:
+                    state_dict = torch.load(weights_path, map_location="cpu")
+                model.load_state_dict(state_dict, strict=False)
+
             except:
                 traceback.print_exc()
                 raise Exception(
                     f"Failed to create ResNet50 model from local checkpoint at '{weights_path}'. "
-                    "You can download the required `pytorch_model.bin` from: https://huggingface.co/timm/resnet50.tv_in1k."
+                    "You can download the required `pytorch_model.bin` or ` model.safetensors` from: https://huggingface.co/timm/resnet50.tv_in1k."
                 )
         else:
             self.ensure_has_internet(self.enc_name)
