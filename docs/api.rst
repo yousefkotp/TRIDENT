@@ -103,6 +103,14 @@ Factory for loading patch-level encoder models.
      - 384
      - ``--patch_encoder lunit-vits8 --patch_size 224 --mag 20``
      - `1aurent/lunit <https://huggingface.co/1aurent/vit_small_patch8_224.lunit_dino>`__
+   * - **DINO ViT-S8**
+     - 384
+     - ``--patch_encoder dino_vit_small_p8 --patch_size 224 --mag 20``
+     - `benchmark-ssl-pathology (p8) <https://github.com/lunit-io/benchmark-ssl-pathology/releases/download/pretrained-weights/dino_vit_small_patch8_ep200.torch>`__
+   * - **DINO ViT-S16**
+     - 384
+     - ``--patch_encoder dino_vit_small_p16 --patch_size 224 --mag 20``
+     - `benchmark-ssl-pathology (p16) <https://github.com/lunit-io/benchmark-ssl-pathology/releases/download/pretrained-weights/dino_vit_small_patch16_ep200.torch>`__
    * - **Hibou**
      - 1024
      - ``--patch_encoder hibou_l --patch_size 224 --mag 20``

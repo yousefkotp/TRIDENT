@@ -20,5 +20,7 @@
     "lunit-vits8": "",
     "conch_v15": "",
     "musk": "",
-    "custom_encoder": ""
+    "custom_encoder": "",
+    "dino_vit_small_p8": "",
+    "dino_vit_small_p16": ""
 }

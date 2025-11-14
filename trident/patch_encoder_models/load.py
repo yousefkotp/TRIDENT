@@ -1,11 +1,15 @@
 import traceback
+import logging
 from abc import abstractmethod
 from typing import Literal, Optional, Any, Dict, Tuple, Callable
 import torch
 import os 
 
 from trident.patch_encoder_models.utils.constants import get_constants
-from trident.patch_encoder_models.utils.transform_utils import get_eval_transforms
+from trident.patch_encoder_models.utils.transform_utils import (
+    get_eval_transforms,
+    get_vit_val_transforms,
+)
 from trident.IO import get_weights_path, has_internet_connection
 
 """
@@ -656,6 +660,101 @@ class LunitS8InferenceEncoder(BasePatchEncoder):
         return model, eval_transform, precision
     
 
+class BenchmarkSSLViTSmallInferenceEncoder(BasePatchEncoder):
+    """
+    Inference encoder for the ViT-Small models released in Lunit's Benchmark-SSL-Pathology repo.
+    """
+
+    MODEL_NAME: str = ""
+    URL_PREFIX = "https://github.com/lunit-io/benchmark-ssl-pathology/releases/download/pretrained-weights"
+    _KEY_MAP = {
+        "dino_vit_small_p16": "DINO_p16",
+        "dino_vit_small_p8": "DINO_p8",
+    }
+    _MODEL_ZOO_REGISTRY = {
+        "BT": "bt_rn50_ep200.torch",
+        "MoCoV2": "mocov2_rn50_ep200.torch",
+        "SwAV": "swav_rn50_ep200.torch",
+        "DINO_p16": "dino_vit_small_patch16_ep200.torch",
+        "DINO_p8": "dino_vit_small_patch8_ep200.torch",
+    }
+
+    def __init__(self, **build_kwargs):
+        if not self.MODEL_NAME:
+            raise ValueError("MODEL_NAME must be defined for BenchmarkSSLViTSmallInferenceEncoder subclasses.")
+        self.model_name = self.MODEL_NAME
+        super().__init__(**build_kwargs)
+
+    def _build(self, normalize: bool = True, img_size: int = 224):
+        from timm.models.vision_transformer import VisionTransformer
+
+        self.enc_name = self.model_name
+        patch_size = 8 if "p8" in self.model_name else 16
+        model = VisionTransformer(
+            img_size=img_size,
+            patch_size=patch_size,
+            embed_dim=384,
+            num_heads=6,
+            num_classes=0,
+        )
+
+        weights_path = self._get_weights_path()
+        state_dict, source = self._get_state_dict(weights_path)
+        verbose = model.load_state_dict(state_dict, strict=True)
+        logging.info(f"Loaded Benchmark-SSL weights for {self.model_name} ({source}): {verbose}")
+
+        eval_transform = get_vit_val_transforms(normalize=normalize, img_size=img_size)
+        precision = torch.float32
+        return model, eval_transform, precision
+
+    def _get_state_dict(self, weights_path: Optional[str]):
+        if weights_path:
+            try:
+                state_dict = torch.load(weights_path, map_location="cpu")
+                source = weights_path
+            except Exception as exc:
+                traceback.print_exc()
+                raise Exception(
+                    f"Failed to load Benchmark-SSL weights from local checkpoint at '{weights_path}'. "
+                    "Please ensure the checkpoint matches the ViT-Small architecture or download it again from "
+                    "https://github.com/lunit-io/benchmark-ssl-pathology/releases/tag/pretrained-weights."
+                ) from exc
+        else:
+            self.ensure_has_internet(self.enc_name)
+            pretrained_url = self._get_pretrained_url(self.model_name)
+            try:
+                state_dict = torch.hub.load_state_dict_from_url(
+                    pretrained_url, progress=False, map_location="cpu"
+                )
+                source = pretrained_url
+            except Exception as exc:
+                traceback.print_exc()
+                raise Exception(
+                    "Failed to download Benchmark-SSL weights automatically. "
+                    f"Please download '{pretrained_url}' manually and register it in "
+                    "`trident/patch_encoder_models/local_ckpts.json`."
+                ) from exc
+        return state_dict, source
+
+    @classmethod
+    def _get_pretrained_url(cls, model_name: str) -> str:
+        key = cls._KEY_MAP.get(model_name)
+        if key is None:
+            raise ValueError(f"Unknown Benchmark-SSL ViT-S model '{model_name}'.")
+        filename = cls._MODEL_ZOO_REGISTRY.get(key)
+        if not filename:
+            raise ValueError(f"No filename registered for Benchmark-SSL key '{key}'.")
+        return f"{cls.URL_PREFIX}/{filename}"
+
+
+class DinoViTSmallP8InferenceEncoder(BenchmarkSSLViTSmallInferenceEncoder):
+    MODEL_NAME = "dino_vit_small_p8"
+
+
+class DinoViTSmallP16InferenceEncoder(BenchmarkSSLViTSmallInferenceEncoder):
+    MODEL_NAME = "dino_vit_small_p16"
+
+
 class UNIInferenceEncoder(BasePatchEncoder):
 
     def __init__(self, **build_kwargs):
@@ -1259,4 +1358,6 @@ encoder_registry = {
     "kaiko-vitl14": KaikoL14InferenceEncoder,
     "lunit-vits8": LunitS8InferenceEncoder,
     "midnight12k": Midnight12kInferenceEncoder,
+    "dino_vit_small_p8": DinoViTSmallP8InferenceEncoder,
+    "dino_vit_small_p16": DinoViTSmallP16InferenceEncoder,
 }
