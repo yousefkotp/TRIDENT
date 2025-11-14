@@ -1,11 +1,13 @@
 from __future__ import annotations
 import os
 import sys
+import warnings
 from tqdm import tqdm
 from typing import Optional, List, Dict, Any
 from inspect import signature
 import geopandas as gpd
-import pandas as pd 
+import pandas as pd
+import h5py
 
 from trident import load_wsi, WSIReaderType
 from trident.IO import create_lock, remove_lock, is_locked, update_log, collect_valid_slides
@@ -367,7 +369,7 @@ class Processor:
                 create_lock(os.path.join(self.job_dir, saveto, 'patches', f'{wsi.name}_patches.h5'))
 
                 # save tissue coords
-                wsi.extract_tissue_coords(
+                coords_path = wsi.extract_tissue_coords(
                     target_mag=target_magnification,
                     patch_size=patch_size,
                     save_coords=os.path.join(self.job_dir, saveto),
@@ -377,10 +379,17 @@ class Processor:
 
                 # save tissue coords visualization
                 if visualize:  
-                    wsi.visualize_coords(
-                        coords_path=os.path.join(self.job_dir, saveto, 'patches', f'{wsi.name}_patches.h5'),
-                        save_patch_viz=os.path.join(self.job_dir, save_patch_viz),
-                    )
+                    viz_coords_path = os.path.join(self.job_dir, save_patch_viz)
+                    if coords_path and os.path.exists(coords_path):
+                        wsi.visualize_coords(
+                            coords_path=coords_path,
+                            save_patch_viz=viz_coords_path,
+                        )
+                    else:
+                        warnings.warn(
+                            f"Skipping visualization for {wsi.name}{wsi.ext}; "
+                            f"coords file missing at {coords_path}."
+                        )
 
                 remove_lock(os.path.join(self.job_dir, saveto, 'patches', f'{wsi.name}_patches.h5'))
                 update_log(os.path.join(self.job_dir, saveto, '_logs_coords.txt'), f'{wsi.name}{wsi.ext}', 'Coords generated')
@@ -488,6 +497,13 @@ class Processor:
                 self.loop.set_postfix_str(f'Coords not found for {wsi.name}. Skipping...')
                 update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Coords not found.')
                 continue
+
+            # Skip slides whose coordinate files contain no patches
+            with h5py.File(coords_path, 'r') as coords_file:
+                if coords_file['coords'].shape[0] == 0:
+                    self.loop.set_postfix_str(f'No coords in {wsi.name}. Skipping...')
+                    update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Coords empty. Skipped.')
+                    continue
 
             # Check if another process has claimed this slide
             if is_locked(wsi_feats_fp):

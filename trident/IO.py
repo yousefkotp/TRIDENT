@@ -4,6 +4,8 @@ import torch
 import socket
 import os
 import json
+import tempfile
+from contextlib import suppress
 from typing import List, Optional, Union, Tuple
 import h5py
 import numpy as np
@@ -262,7 +264,10 @@ def remove_lock(path: str, suffix: Optional[str] = None) -> None:
     if suffix is not None:
         path = f"{path}_{suffix}"
     lock_file = f"{path}.lock"
-    os.remove(lock_file)
+    try:
+        os.remove(lock_file)
+    except FileNotFoundError:
+        pass
 
 #####################
 
@@ -340,7 +345,7 @@ def update_log(path_to_log, key, message):
     
 ################################################################################
 
-def save_h5(save_path, assets, attributes = None, mode = 'w'):
+def save_h5(save_path, assets, attributes = None, mode = 'w', file_attributes = None):
     """
     The `save_h5` function saves a dictionary of assets to an HDF5 file. This is commonly used to store 
     large datasets or hierarchical data structures in a compact and organized format.
@@ -353,6 +358,9 @@ def save_h5(save_path, assets, attributes = None, mode = 'w'):
         A dictionary containing the data to save. Keys represent dataset names, and values are NumPy arrays.
     attributes : dict, optional
         A dictionary mapping dataset names to additional metadata (attributes) to save alongside the data. Defaults to None.
+    file_attributes : dict, optional
+        Metadata stored at the file (root) level. Useful for compatibility with tools that expect
+        attributes outside of individual datasets. Defaults to None.
     mode : str, optional
         The file mode for opening the HDF5 file. Options include 'w' (write) and 'a' (append). Defaults to 'w'.
 
@@ -369,33 +377,72 @@ def save_h5(save_path, assets, attributes = None, mode = 'w'):
     >>> # Saves datasets and attributes to "output.h5".
     """
 
-    with h5py.File(save_path, mode) as file:
-        for key, val in assets.items():
-            data_shape = val.shape
-            if key not in file:
-                data_type = val.dtype
-                chunk_shape = (1, ) + data_shape[1:]
-                maxshape = (None, ) + data_shape[1:]
-                dset = file.create_dataset(key, shape=data_shape, maxshape=maxshape, chunks=chunk_shape, dtype=data_type)
-                dset[:] = val
-                if attributes is not None:
-                    if key in attributes.keys():
-                        for attr_key, attr_val in attributes[key].items():
-                            try:
-                                # Serialize if the attribute value is a dictionary
-                                if isinstance(attr_val, dict):
-                                    attr_val = json.dumps(attr_val)
-                                # Serialize Nones
-                                elif attr_val is None:
-                                    attr_val = 'None'
-                                dset.attrs[attr_key] = attr_val
-                            except:
-                                raise Exception(f'WARNING: Could not save attribute {attr_key} with value {attr_val} for asset {key}')
-                                
-            else:
-                dset = file[key]
-                dset.resize(len(dset) + data_shape[0], axis=0)
-                dset[-data_shape[0]:] = val
+    dir_name = os.path.dirname(save_path)
+    if dir_name:
+        os.makedirs(dir_name, exist_ok=True)
+
+    tmp_path = None
+    target_path = save_path
+    use_atomic_write = mode == 'w'
+    if use_atomic_write:
+        tmp_dir = dir_name if dir_name else '.'
+        base_name = os.path.basename(save_path) or "tmp"
+        fd, tmp_path = tempfile.mkstemp(dir=tmp_dir, prefix=f".{base_name}.", suffix=".tmp")
+        os.close(fd)
+        target_path = tmp_path
+
+    try:
+        with h5py.File(target_path, mode) as file:
+            for key, val in assets.items():
+                data_shape = val.shape
+                if key not in file:
+                    data_type = val.dtype
+                    chunk_shape = (1, ) + data_shape[1:]
+                    maxshape = (None, ) + data_shape[1:]
+                    dset = file.create_dataset(key, shape=data_shape, maxshape=maxshape, chunks=chunk_shape, dtype=data_type)
+                    dset[:] = val
+                    if attributes is not None:
+                        if key in attributes.keys():
+                            for attr_key, attr_val in attributes[key].items():
+                                try:
+                                    # Serialize if the attribute value is a dictionary
+                                    if isinstance(attr_val, dict):
+                                        attr_val = json.dumps(attr_val)
+                                    # Serialize Nones
+                                    elif attr_val is None:
+                                        attr_val = 'None'
+                                    dset.attrs[attr_key] = attr_val
+                                except:
+                                    raise Exception(f'WARNING: Could not save attribute {attr_key} with value {attr_val} for asset {key}')
+                                    
+                else:
+                    dset = file[key]
+                    dset.resize(len(dset) + data_shape[0], axis=0)
+                    dset[-data_shape[0]:] = val
+
+            if file_attributes:
+                for attr_key, attr_val in file_attributes.items():
+                    try:
+                        if isinstance(attr_val, dict):
+                            attr_val = json.dumps(attr_val)
+                        elif attr_val is None:
+                            attr_val = 'None'
+                        file.attrs[attr_key] = attr_val
+                    except Exception:
+                        raise Exception(f'WARNING: Could not save file attribute {attr_key} with value {attr_val}')
+    except Exception:
+        if tmp_path is not None:
+            with suppress(FileNotFoundError):
+                os.remove(tmp_path)
+        raise
+
+    if tmp_path is not None:
+        try:
+            os.replace(tmp_path, save_path)
+        except Exception:
+            with suppress(FileNotFoundError):
+                os.remove(tmp_path)
+            raise
 
 ################################################################################
 
@@ -470,7 +517,9 @@ def read_coords(coords_path):
     Returns:
     --------
     attrs : dict
-        A dictionary of user-defined attributes stored during patching.
+        A dictionary of user-defined attributes stored during patching. Both dataset-level (`coords`
+        attributes) and file-level attributes are returned, with dataset-level keys taking precedence
+        when duplicates exist.
     coords : np.array
         An array of patch coordinates at level 0.
 
@@ -483,8 +532,10 @@ def read_coords(coords_path):
     [[0, 0], [0, 256], [256, 0], ...]
     """
     with h5py.File(coords_path, 'r') as f:
-        attrs = dict(f['coords'].attrs)
-        coords = f['coords'][:]
+        coords_dataset = f['coords']
+        attrs = dict(f.attrs)
+        attrs.update(dict(coords_dataset.attrs))
+        coords = coords_dataset[:]
     return attrs, coords
 
 
@@ -557,6 +608,7 @@ def coords_to_h5(
     save_h5(save_path,
             assets = assets,
             attributes = {'coords': attributes},
+            file_attributes = attributes,
             mode='w')
 
 

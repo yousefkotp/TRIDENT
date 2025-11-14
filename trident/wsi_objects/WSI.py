@@ -703,7 +703,8 @@ class WSI:
         Returns
         -------
         str
-            The file path to the saved visualization image.
+            The file path to the saved visualization image, or an empty
+            string if visualization is skipped.
 
         Examples
         --------
@@ -711,6 +712,13 @@ class WSI:
         >>> print(viz_path)
         output_viz/sample_name.png
         """
+
+        coords_path = os.fspath(coords_path)
+        if not os.path.exists(coords_path):
+            warnings.warn(
+                f"Visualization skipped for {self.name}: coords file not found at {coords_path}."
+            )
+            return ""
 
         self._lazy_initialize()
 
@@ -724,10 +732,21 @@ class WSI:
             if None in (patch_size, level0_magnification, target_magnification):
                 raise KeyError('Missing essential attributes in coords_attrs.')
 
-        except (KeyError, FileNotFoundError, ValueError) as e:
+        except FileNotFoundError as e:
+            warnings.warn(
+                f"Visualization skipped for {self.name}: coords file disappeared ({e})."
+            )
+            return ""
+
+        except (KeyError, ValueError) as e:
             warnings.warn(f"Cannot read using Trident coords format ({str(e)}). Trying with CLAM/Fishing-Rod.")
-            patcher = WSIPatcher.from_legacy_coords_file(self, coords_path, coords_only=True)
-        
+            try:
+                patcher = WSIPatcher.from_legacy_coords_file(self, coords_path, coords_only=True)
+            except Exception as legacy_error:  # noqa: BLE001
+                warnings.warn(
+                    f"Legacy coords parsing also failed for {self.name}: {legacy_error}. Skipping visualization."
+                )
+                return ""
         else:
             patcher = self.create_patcher(
                 patch_size=patch_size,
@@ -804,7 +823,7 @@ class WSI:
 
         except (KeyError, FileNotFoundError, ValueError) as e:
             warnings.warn(f"Cannot read using Trident coords format ({str(e)}). Trying with CLAM/Fishing-Rod.")
-            patcher = WSIPatcher.from_legacy_coords_file(self, coords_path, coords_only=True, pil=True)
+            patcher = WSIPatcher.from_legacy_coords_file(self, coords_path, coords_only=False, pil=True)
 
         else:
             patcher = self.create_patcher(
