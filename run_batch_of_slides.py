@@ -58,7 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--custom_mpp_keys', type=str, nargs='+', default=None,
                     help='Custom keys used to store the resolution as MPP (micron per pixel) in your list of whole-slide image.')
     parser.add_argument('--custom_list_of_wsis', type=str, default=None,
-                    help='Custom list of WSIs specified in a csv file.')
+                    help="Path to a CSV with a 'wsi' (relative path) or 'filename' column listing WSIs to process.")
     parser.add_argument('--reader_type', type=str, choices=['openslide', 'image', 'cucim', 'sdpc'], default=None,
                     help='Force the use of a specific WSI image reader. Options are ["openslide", "image", "cucim", "sdpc"]. Defaults to None (auto-determine which reader to use).')
     parser.add_argument("--search_nested", action="store_true",

@@ -6,7 +6,7 @@ import os
 import json
 import tempfile
 from contextlib import suppress
-from typing import List, Optional, Union, Tuple
+from typing import List, Optional, Union, Tuple, Dict
 import h5py
 import numpy as np
 import cv2
@@ -37,7 +37,7 @@ def collect_valid_slides(
     wsi_dir : str
         Path to the directory containing WSIs.
     custom_list_path : Optional[str]
-        Path to a CSV file with 'wsi' column of relative slide paths.
+        Path to a CSV file with either a 'wsi' column (relative paths) or a 'filename' column (basenames).
     wsi_ext : Optional[List[str]]
         Allowed file extensions.
     search_nested : bool
@@ -63,27 +63,61 @@ def collect_valid_slides(
         from concurrent.futures import ThreadPoolExecutor
 
         wsi_df = pd.read_csv(custom_list_path)
-        if 'wsi' not in wsi_df.columns:
-            raise ValueError("CSV must contain a column named 'wsi'.")
+        columns_lower = {col.lower(): col for col in wsi_df.columns}
+        use_filename_column = False
 
-        rel_paths = wsi_df['wsi'].dropna().astype(str).tolist()
-        if not rel_paths:
+        if 'wsi' in columns_lower:
+            target_column = columns_lower['wsi']
+        elif 'filename' in columns_lower:
+            target_column = columns_lower['filename']
+            use_filename_column = True
+        else:
+            raise ValueError("CSV must contain either a 'wsi' or a 'filename' column.")
+
+        requested_entries = wsi_df[target_column].dropna().astype(str).tolist()
+        if not requested_entries:
             raise ValueError(f"No valid slides found in the custom list at {custom_list_path}.")
 
-        def exists_fn(rel_path: str) -> bool:
-            return os.path.exists(os.path.join(wsi_dir, rel_path))
+        if not use_filename_column:
+            def exists_fn(rel_path: str) -> bool:
+                return os.path.exists(os.path.join(wsi_dir, rel_path))
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            results = list(executor.map(exists_fn, rel_paths))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                results = list(executor.map(exists_fn, requested_entries))
 
-        for rel_path, exists in zip(rel_paths, results):
-            if not exists:
-                raise ValueError(
-                    f"Slide '{rel_path}' not found in '{wsi_dir}'. "
-                    "If the folder is nested, ensure 'wsi' column contains relative paths."
-                )
+            for rel_path, exists in zip(requested_entries, results):
+                if not exists:
+                    raise ValueError(
+                        f"Slide '{rel_path}' not found in '{wsi_dir}'. "
+                        "If the folder is nested, ensure the 'wsi' column contains relative paths."
+                    )
+            valid_rel_paths = requested_entries
+        else:
+            filename_to_rel_path: Dict[str, str] = {}
+            request_set = set(requested_entries)
 
-        valid_rel_paths = rel_paths
+            if search_nested:
+                for root, _, files in os.walk(wsi_dir):
+                    for fname in files:
+                        if fname in request_set and fname not in filename_to_rel_path:
+                            rel_path = os.path.relpath(os.path.join(root, fname), wsi_dir)
+                            filename_to_rel_path[fname] = rel_path
+                    if len(filename_to_rel_path) == len(request_set):
+                        break
+            else:
+                for fname in request_set:
+                    abs_path = os.path.join(wsi_dir, fname)
+                    if os.path.isfile(abs_path):
+                        filename_to_rel_path[fname] = fname
+
+            for fname in requested_entries:
+                if fname not in filename_to_rel_path:
+                    raise ValueError(
+                        f"Slide '{fname}' not found in '{wsi_dir}'. "
+                        "Enable '--search_nested' if files are stored in subdirectories."
+                    )
+
+            valid_rel_paths = [filename_to_rel_path[fname] for fname in requested_entries]
 
     else:
         if wsi_ext is None:

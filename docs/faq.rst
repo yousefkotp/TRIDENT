@@ -12,13 +12,13 @@ Frequently Asked Questions
 
 .. dropdown:: **My WSIs have no micron-per-pixel (MPP) or magnification metadata. What should I do?**
 
-   PNGs and JPEGs do not store MPP metadata in the file itself. If you're working with such formats, passing a CSV via `--custom_list_of_wsis` is **required**. This CSV should include at least two columns: `wsi` and `mpp`.
+   PNGs and JPEGs do not store MPP metadata in the file itself. If you're working with such formats, passing a CSV via `--custom_list_of_wsis` is **required**. This CSV should include either a `wsi` column (relative paths) or a `filename` column (basenames), along with an `mpp` column.
 
    Example:
 
    .. code-block:: csv
 
-      wsi,mpp
+      filename,mpp
       TCGA-AJ-A8CV-01Z-00-DX1_1.png,0.25
       TCGA-AJ-A8CV-01Z-00-DX1_2.png,0.25
       TCGA-AJ-A8CV-01Z-00-DX1_3.png,0.25

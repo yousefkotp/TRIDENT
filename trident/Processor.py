@@ -67,10 +67,12 @@ class Processor:
                 A list of custom keys in the slide metadata for retrieving the microns per pixel (MPP) value. 
                 If not provided, standard keys will be used. Defaults to None.
             custom_list_of_wsis (str, optional): 
-                Path to a csv file with a custom list of WSIs to process in a field called 'wsi' (including extensions). If provided, only 
-                these slides will be considered for processing. Defaults to None, which means all 
-                slides matching the wsi_ext extensions will be processed.
-                Note: If `custom_list_of_wsis` is provided, any names that do not match the available slides will be ignored, and a warning will be printed.
+                Path to a csv file with a custom list of WSIs to process. Accepted columns are:
+                    - ``wsi``: relative paths (with extensions) inside ``wsi_source``.
+                    - ``filename``: file basenames (with extensions) located in ``wsi_source`` or, if ``search_nested`` is True, any subdirectory.
+                If provided, only these slides will be considered for processing. Defaults to None, which means all 
+                slides matching the ``wsi_ext`` extensions will be processed.
+                Note: If `custom_list_of_wsis` is provided and a name does not match any file, an error will be raised.
             max_workers (int, optional):
                 Maximum number of workers for data loading. If None, the default behavior will be used.
                 Defaults to None.

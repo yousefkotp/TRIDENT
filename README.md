@@ -186,7 +186,7 @@ main()
    - **A**: You can try another segmentation model by specifying `segmenter --grandqc`.
 
 - **Q**: I want to process a custom list of WSIs. Can I do it? Also, most of my WSIs don't have the micron per pixel (mpp) stored. Can I pass it?
-   - **A**: Yes using the `--custom_list_of_wsis` argument. Provide a list of WSI names in a CSV (with slide extension, `wsi`). Optionally, provide the mpp (field `mpp`)
+   - **A**: Yes using the `--custom_list_of_wsis` argument. Provide a CSV containing either a `wsi` column (relative paths) or a `filename` column (basenames with extensions). Optionally, provide the mpp (`mpp` column).
  
  - **Q**: Do I need to install any additional packages to use Trident?
    - **A**: Most pretrained models require additional dependencies (e.g., the CTransPath patch encoder requires `pip install timm_ctp`). When you load a model using Trident, it will tell you what dependencies are missing and how to install them. 
