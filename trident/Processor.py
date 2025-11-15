@@ -109,6 +109,7 @@ class Processor:
         if not (sys.version_info.major >= 3 and sys.version_info.minor >= 9):
             raise EnvironmentError("Trident requires Python 3.9 or above. Python 3.10 is recommended.")
 
+        os.makedirs(job_dir, exist_ok=True)
         self.job_dir = job_dir
         self.wsi_source = wsi_source
         self.wsi_ext = wsi_ext or (list(PIL_EXTENSIONS) + list(OPENSLIDE_EXTENSIONS) + list(SDPC_EXTENSIONS))
@@ -136,10 +137,19 @@ class Processor:
         # === Extract mpp column if provided ===
         if custom_list_of_wsis is not None:
             wsi_df = pd.read_csv(custom_list_of_wsis)
-            valid_mpps = (
-                wsi_df['mpp'].dropna().tolist()
-                if 'mpp' in wsi_df.columns else None
-            )
+            if 'mpp' in wsi_df.columns:
+                mpp_series = wsi_df['mpp']
+                valid_mpps: List[Optional[float]] = []
+                for mpp in mpp_series:
+                    if pd.notna(mpp):
+                        try:
+                            valid_mpps.append(float(mpp))
+                        except (TypeError, ValueError):
+                            valid_mpps.append(None)
+                    else:
+                        valid_mpps.append(None)
+            else:
+                valid_mpps = None
         else:
             valid_mpps = None
 
@@ -147,6 +157,9 @@ class Processor:
 
         # === Initialize WSIs ===
         self.wsis = []
+        skipped_wsis = []
+        self.invalid_mpp_log = os.path.join(self.job_dir, '_logs_invalid_mpp.txt')
+        self._invalid_wsi_names: set[str] = set()
         for wsi_idx, abs_path in enumerate(full_paths):
             name = os.path.basename(abs_path)
             tissue_seg_path = os.path.join(
@@ -156,16 +169,88 @@ class Processor:
             if not os.path.exists(tissue_seg_path):
                 tissue_seg_path = None
 
+            provided_mpp = valid_mpps[wsi_idx] if valid_mpps is not None else None
+            if provided_mpp is not None and not self._is_plausible_mpp(provided_mpp):
+                msg = (
+                    f"Skipping {name}: provided mpp is missing or outside the expected range (0, 2.4). "
+                    "Please supply a valid `mpp` value."
+                )
+                print(f'[PROCESSOR] {msg}')
+                update_log(self.invalid_mpp_log, name, msg)
+                skipped_wsis.append(name)
+                self._invalid_wsi_names.add(name)
+                continue
+
             slide = load_wsi(
                 slide_path=abs_path,
                 name=name,
                 tissue_seg_path=tissue_seg_path,
                 custom_mpp_keys=self.custom_mpp_keys,
-                mpp=valid_mpps[wsi_idx] if valid_mpps is not None else None,
+                mpp=provided_mpp,
                 max_workers=self.max_workers,
                 reader_type=reader_type,
             )
             self.wsis.append(slide)
+
+        if skipped_wsis:
+            print(f'[PROCESSOR] Skipped {len(skipped_wsis)} slide(s) based on provided mpp. Details in {self.invalid_mpp_log}.')
+        if len(self.wsis) == 0:
+            raise ValueError("No slides with valid mpp were found; aborting processing.")
+
+    @staticmethod
+    def _is_plausible_mpp(mpp: Optional[float]) -> bool:
+        if mpp is None:
+            return False
+        try:
+            mpp_val = float(mpp)
+        except (TypeError, ValueError):
+            return False
+        return 0 < mpp_val < 2.4
+
+    def _ensure_valid_mpp(self, wsi) -> bool:
+        """
+        Lazily initialize a WSI and confirm it has a plausible MPP.
+        This is lightweight because it runs only for slides that reach processing time,
+        instead of initializing every slide up front.
+        """
+        if wsi.name in self._invalid_wsi_names:
+            return False
+
+        try:
+            if not getattr(wsi, "lazy_init", True):
+                wsi._lazy_initialize()
+            if not self._is_plausible_mpp(getattr(wsi, "mpp", None)):
+                raise ValueError(f"Missing or implausible mpp value ({getattr(wsi, 'mpp', None)}).")
+            return True
+        except Exception as e:
+            if isinstance(e, ValueError) or self.skip_errors:
+                msg = f"Skipping {wsi.name}: unable to determine a valid mpp ({e})."
+                print(f'[PROCESSOR] {msg}')
+                update_log(self.invalid_mpp_log, wsi.name, msg)
+                self._invalid_wsi_names.add(wsi.name)
+                self._cleanup_wsi(wsi)
+                return False
+            raise
+
+    @staticmethod
+    def _cleanup_wsi(wsi) -> None:
+        """
+        Attempt to close any open handles for a WSI to free memory.
+        """
+        try:
+            closer = getattr(wsi, "close", None)
+            if callable(closer):
+                closer()
+                return
+            # Fallback: close underlying img if it offers a close method
+            img = getattr(wsi, "img", None)
+            if img is not None:
+                img_close = getattr(img, "close", None)
+                if callable(img_close):
+                    img_close()
+        except Exception:
+            # Best-effort cleanup; ignore cleanup failures
+            pass
 
     def run_segmentation_job(
         self, 
@@ -221,6 +306,9 @@ class Processor:
 
         self.loop = tqdm(self.wsis, desc='Segmenting tissue', total = len(self.wsis))
         for wsi in self.loop:   
+            if not self._ensure_valid_mpp(wsi):
+                continue
+
             # Check if contour already exists
             if os.path.exists(os.path.join(saveto, f'{wsi.name}.jpg')) and not is_locked(os.path.join(saveto, f'{wsi.name}.jpg')):
                 self.loop.set_postfix_str(f'{wsi.name} already segmented. Skipping...')
@@ -339,8 +427,11 @@ class Processor:
             ignore = ['segmentation_model', 'loop', 'valid_slides', 'wsis']
         )
         self.loop = tqdm(self.wsis, desc=f'Saving tissue coordinates to {saveto}', total = len(self.wsis))
-        for wsi in self.loop:    
-        
+        for wsi in self.loop:
+
+            if not self._ensure_valid_mpp(wsi):
+                continue
+
             # Check if patch coords already exist
             if os.path.exists(os.path.join(self.job_dir, saveto, 'patches', f'{wsi.name}_patches.h5')):
                 self.loop.set_postfix_str(f'Patch coords already generated for {wsi.name}. Skipping...')
@@ -486,6 +577,9 @@ class Processor:
         log_fp = os.path.join(self.job_dir, coords_dir, f'_logs_feats_{patch_encoder.enc_name}.txt')
         self.loop = tqdm(self.wsis, desc=f'Extracting patch features from coords in {coords_dir}', total = len(self.wsis))
         for wsi in self.loop:    
+            if not self._ensure_valid_mpp(wsi):
+                continue
+
             wsi_feats_fp = os.path.join(self.job_dir, saveto, f'{wsi.name}.{saveas}')
             # Check if features already exist
             if os.path.exists(wsi_feats_fp) and not is_locked(wsi_feats_fp):
@@ -630,6 +724,9 @@ class Processor:
 
         self.loop = tqdm(self.wsis, desc=f'Extracting slide features using {slide_encoder.enc_name}', total=len(self.wsis))
         for wsi in self.loop:
+            if not self._ensure_valid_mpp(wsi):
+                continue
+
             # Check if slide features already exist
             slide_feature_path = os.path.join(self.job_dir, saveto, f'{wsi.name}.{saveas}')
             if os.path.exists(slide_feature_path) and not is_locked(slide_feature_path):
