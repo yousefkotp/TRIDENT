@@ -671,6 +671,12 @@ class WSI:
 
         self._lazy_initialize()
 
+        # Prevent requesting higher magnification than what level 0 provides to avoid upsampling.
+        if getattr(self, "mag", None) is not None and target_mag > self.mag:
+            raise ValueError(
+                f"Requested target magnification {target_mag}x exceeds available level-0 magnification {self.mag}x."
+            )
+
         patcher = self.create_patcher(
             patch_size=patch_size,
             src_mag=self.mag,
@@ -815,17 +821,23 @@ class WSI:
 
         try:
             coords_attrs, coords = read_coords(coords_path)
-            patch_size = coords_attrs.get('patch_size', None)
-            level0_magnification = coords_attrs.get('level0_magnification', None)
-            target_magnification = coords_attrs.get('target_magnification', None)            
-            if None in (patch_size, level0_magnification, target_magnification):
-                raise KeyError('Missing attributes in coords_attrs.')         
 
         except (KeyError, FileNotFoundError, ValueError) as e:
             warnings.warn(f"Cannot read using Trident coords format ({str(e)}). Trying with CLAM/Fishing-Rod.")
             patcher = WSIPatcher.from_legacy_coords_file(self, coords_path, coords_only=False, pil=True)
 
         else:
+            patch_size = coords_attrs.get('patch_size', None)
+            level0_magnification = coords_attrs.get('level0_magnification', None)
+            target_magnification = coords_attrs.get('target_magnification', None)            
+            if None in (patch_size, level0_magnification, target_magnification):
+                raise KeyError('Missing attributes in coords_attrs.')
+            if target_magnification > level0_magnification:
+                raise ValueError(
+                    f"Requested target magnification {target_magnification}x exceeds "
+                    f"available level-0 magnification {level0_magnification}x."
+                )
+
             patcher = self.create_patcher(
                 patch_size=patch_size,
                 src_mag=level0_magnification,

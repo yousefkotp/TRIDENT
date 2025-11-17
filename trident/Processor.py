@@ -431,7 +431,6 @@ class Processor:
 
             if not self._ensure_valid_mpp(wsi):
                 continue
-
             # Check if patch coords already exist
             if os.path.exists(os.path.join(self.job_dir, saveto, 'patches', f'{wsi.name}_patches.h5')):
                 self.loop.set_postfix_str(f'Patch coords already generated for {wsi.name}. Skipping...')
@@ -457,6 +456,23 @@ class Processor:
                 continue
 
             try:
+                # Skip if requested magnification exceeds available level-0 magnification.
+                if getattr(wsi, "lazy_init", True):
+                    wsi._lazy_initialize()
+                wsi_mag = getattr(wsi, "mag", None)
+                if wsi_mag is not None and target_magnification > wsi_mag:
+                    msg = (
+                        f"Requested target magnification {target_magnification}x exceeds "
+                        f"available level-0 magnification {wsi_mag}x. Skipping {wsi.name}."
+                    )
+                    self.loop.set_postfix_str(msg)
+                    update_log(
+                        os.path.join(self.job_dir, saveto, '_logs_coords.txt'),
+                        f'{wsi.name}{wsi.ext}',
+                        f'Skipped: target_mag ({target_magnification}) > level0_mag ({wsi_mag}).'
+                    )
+                    continue
+
                 self.loop.set_postfix_str(f'Generating patch coords for {wsi.name}{wsi.ext}')
                 update_log(os.path.join(self.job_dir, saveto, '_logs_coords.txt'), f'{wsi.name}{wsi.ext}', 'LOCKED. Generating coords...')
                 create_lock(os.path.join(self.job_dir, saveto, 'patches', f'{wsi.name}_patches.h5'))
@@ -599,6 +615,18 @@ class Processor:
                 if coords_file['coords'].shape[0] == 0:
                     self.loop.set_postfix_str(f'No coords in {wsi.name}. Skipping...')
                     update_log(log_fp, f'{wsi.name}{wsi.ext}', 'Coords empty. Skipped.')
+                    continue
+                level0_mag = coords_file['coords'].attrs.get('level0_magnification', None)
+                target_mag = coords_file['coords'].attrs.get('target_magnification', None)
+                if level0_mag is not None and target_mag is not None and target_mag > level0_mag:
+                    self.loop.set_postfix_str(
+                        f'Skipping {wsi.name}: target mag {target_mag}x > available {level0_mag}x.'
+                    )
+                    update_log(
+                        log_fp,
+                        f'{wsi.name}{wsi.ext}',
+                        f'Skipped: target_mag ({target_mag}) > level0_mag ({level0_mag}).'
+                    )
                     continue
 
             # Check if another process has claimed this slide
